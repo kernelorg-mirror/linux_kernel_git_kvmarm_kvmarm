@@ -62,12 +62,51 @@ struct kvm_vmid {
 	u32    vmid;
 };
 
-struct kvm_arch {
+struct kvm_s2_mmu {
 	struct kvm_vmid vmid;
 
-	/* 1-level 2nd stage table, protected by kvm->mmu_lock */
-	pgd_t *pgd;
-	phys_addr_t pgd_phys;
+	/*
+	 * 1-level 2nd stage table, protected by kvm->mmu_lock
+	 *
+	 * Two kvm_s2_mmu structures in the same VM can point to the same pgd
+	 * here.  This happens when running a non-VHE guest hypervisor which
+	 * uses the canonical stage 2 page table for both vEL2 and for vEL1/0
+	 * with vHCR_EL2.VM == 0.
+	 */
+	pgd_t		*pgd;
+	phys_addr_t	pgd_phys;
+
+	/*
+	 * For a shadow stage-2 MMU, the virtual vttbr programmed by the guest
+	 * hypervisor.  Unused for kvm_arch->mmu.
+	 */
+	u64	vttbr;
+
+	/* true when this represents a nested context where virtual HCR_EL2.VM == 1 */
+	bool	nested_stage2_enabled;
+
+	/*
+	 * -1: This is brand new
+	 *  0: Nobody is currently using this, but it holds valid data
+	 * >0: Somebody is actively using this.
+	 */
+	int usage_count;
+};
+
+struct kvm_arch {
+	/* Stage 2 paging state for the VM, where no virtual VMID is used,
+	 * because either:
+	 *   - nested is not enabled for the VM, or
+	 *   - the VM is running in virtual EL2
+	 */
+	struct kvm_s2_mmu mmu;
+
+	/*
+	 * Stage 2 paging stage for VMs with nested virtual using a virtual
+	 * VMID.
+	 */
+	struct kvm_s2_mmu *nested_mmus;
+	size_t nested_mmus_size;
 
 	/* The last vcpu id that ran on each physical CPU */
 	int __percpu *last_vcpu_ran;
@@ -250,6 +289,9 @@ typedef struct kvm_cpu_context kvm_cpu_context_t;
 
 struct kvm_vcpu_arch {
 	struct kvm_cpu_context ctxt;
+
+	/* Stage 2 paging state used by the hardware on next switch */
+	struct kvm_s2_mmu *hw_mmu;
 
 	/* HYP configuration */
 	u64 hcr_el2;
@@ -555,6 +597,7 @@ void kvm_vcpu_put_sysregs(struct kvm_vcpu *vcpu);
 struct kvm *kvm_arch_alloc_vm(void);
 void kvm_arch_free_vm(struct kvm *kvm);
 
+int kvm_vcpu_init_nested(struct kvm_vcpu *vcpu);
 int handle_wfx_nested(struct kvm_vcpu *vcpu, bool is_wfe);
 
 #endif /* __ARM64_KVM_HOST_H__ */

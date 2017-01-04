@@ -62,7 +62,27 @@ struct kvm_vmid {
 	u32    vmid;
 };
 
+struct kvm_s2_mmu {
+	struct kvm_vmid vmid;
+
+	/* Stage-2 page table */
+	pgd_t *pgd;
+	phys_addr_t pgd_phys;
+};
+
+/* Per shadow VMID mmu structure. This is only for nested virtualization */
+struct kvm_nested_s2_mmu {
+	struct kvm_s2_mmu mmu;
+
+	u64 virtual_vttbr;
+
+	struct list_head list;
+};
+
 struct kvm_arch {
+	/* Stage 2 paging state for the VM */
+	struct kvm_s2_mmu mmu;
+
 	/* The last vcpu id that ran on each physical CPU */
 	int __percpu *last_vcpu_ran;
 
@@ -71,12 +91,8 @@ struct kvm_arch {
 	 * here.
 	 */
 
-	/* The VMID generation used for the virt. memory system */
-	struct kvm_vmid vmid;
-
-	/* Stage-2 page table */
-	pgd_t *pgd;
-	phys_addr_t pgd_phys;
+	/* Never used on arm but added to be compatible with arm64 */
+	struct list_head nested_mmu_list;
 
 	/* Interrupt controller */
 	struct vgic_dist	vgic;
@@ -191,6 +207,12 @@ struct kvm_vcpu_arch {
 
 	/* Detect first run of a vcpu */
 	bool has_run_once;
+
+	/* Stage 2 paging state used by the hardware on next switch */
+	struct kvm_s2_mmu *hw_mmu;
+
+	/* VTTBR value used by the shadow paging MMU in vEL2. */
+	u64 vttbr_vel2;
 };
 
 struct kvm_vm_stat {

@@ -129,18 +129,23 @@ int kvm_arch_init_vm(struct kvm *kvm, unsigned long type)
 	for_each_possible_cpu(cpu)
 		*per_cpu_ptr(kvm->arch.last_vcpu_ran, cpu) = -1;
 
-	ret = kvm_alloc_stage2_pgd(kvm);
+	ret = kvm_alloc_stage2_pgd(&kvm->arch.mmu);
 	if (ret)
 		goto out_fail_alloc;
+
+	/* Mark the initial VMID generation invalid */
+	kvm->arch.mmu.vmid.vmid_gen = 0;
+	kvm->arch.mmu.vttbr = -1;
+	kvm->arch.mmu.nested_stage2_enabled = false;
+
+	kvm->arch.nested_mmus = NULL;
+	kvm->arch.nested_mmus_size = 0;
 
 	ret = create_hyp_mappings(kvm, kvm + 1, PAGE_HYP);
 	if (ret)
 		goto out_free_stage2_pgd;
 
 	kvm_vgic_early_init(kvm);
-
-	/* Mark the initial VMID generation invalid */
-	kvm->arch.vmid.vmid_gen = 0;
 
 	/* The maximum number of VCPUs is limited by the host's GIC model */
 	kvm->arch.max_vcpus = vgic_present ?
@@ -343,6 +348,8 @@ void kvm_arch_vcpu_unblocking(struct kvm_vcpu *vcpu)
 
 int kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 {
+	struct kvm_s2_mmu *mmu = &vcpu->kvm->arch.mmu;
+
 	/* Force users to call KVM_ARM_VCPU_INIT */
 	vcpu->arch.target = -1;
 	bitmap_zero(vcpu->arch.features, KVM_VCPU_MAX_FEATURES);
@@ -352,12 +359,16 @@ int kvm_arch_vcpu_init(struct kvm_vcpu *vcpu)
 
 	kvm_arm_reset_debug_ptr(vcpu);
 
+	vcpu->arch.hw_mmu = mmu;
+
 	return kvm_vgic_vcpu_init(vcpu);
 }
 
 void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 {
 	int *last_ran;
+
+	kvm_vcpu_load_hw_mmu(vcpu);
 
 	last_ran = this_cpu_ptr(vcpu->kvm->arch.last_vcpu_ran);
 
@@ -366,7 +377,20 @@ void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 	 * over-invalidation doesn't affect correctness.
 	 */
 	if (*last_ran != vcpu->vcpu_id) {
-		kvm_call_hyp(__kvm_tlb_flush_local_vmid, vcpu);
+		struct kvm_s2_mmu *mmu = &vcpu->kvm->arch.mmu;
+		u64 vttbr = kvm_get_vttbr(mmu);
+
+		/*
+		 * TODO: We need to ask Rutland if we need an icache
+		 * invalidation similar to __kvm_flush_vm_context and we need
+		 * to optimize the nested case to only invalidate the
+		 * necessary VMIDs.
+		 */
+		if (nested_virt_in_use(vcpu))
+			kvm_call_hyp(__kvm_tlb_flush_local_all);
+		else
+			kvm_call_hyp(__kvm_tlb_flush_local_vmid, vttbr);
+
 		*last_ran = vcpu->vcpu_id;
 	}
 
@@ -391,6 +415,7 @@ void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu)
 	kvm_vcpu_put_sysregs(vcpu);
 	kvm_timer_vcpu_put(vcpu);
 	kvm_vgic_put(vcpu);
+	kvm_vcpu_put_hw_mmu(vcpu);
 
 	vcpu->cpu = -1;
 
@@ -675,7 +700,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		 */
 		cond_resched();
 
-		update_vmid(&vcpu->kvm->arch.vmid);
+		update_vmid(&vcpu->arch.hw_mmu->vmid);
 
 		check_vcpu_requests(vcpu);
 
@@ -724,7 +749,7 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 		 */
 		smp_store_mb(vcpu->mode, IN_GUEST_MODE);
 
-		if (ret <= 0 || need_new_vmid_gen(&vcpu->kvm->arch.vmid) ||
+		if (ret <= 0 || need_new_vmid_gen(&vcpu->arch.hw_mmu->vmid) ||
 		    kvm_request_pending(vcpu)) {
 			vcpu->mode = OUTSIDE_GUEST_MODE;
 			isb(); /* Ensure work in x_flush_hwstate is committed */
@@ -959,6 +984,17 @@ static int kvm_vcpu_set_target(struct kvm_vcpu *vcpu,
 	vcpu->arch.target = phys_target;
 
 	/* Now we know what it is, we can reset it. */
+	if (test_bit(KVM_ARM_VCPU_NESTED_VIRT, vcpu->arch.features)) {
+		int ret;
+
+		if (!cpus_have_const_cap(ARM64_HAS_NESTED_VIRT))
+			return -EINVAL;
+
+		ret = kvm_vcpu_init_nested(vcpu);
+		if (ret)
+			return ret;
+	}
+
 	return kvm_reset_vcpu(vcpu);
 }
 
