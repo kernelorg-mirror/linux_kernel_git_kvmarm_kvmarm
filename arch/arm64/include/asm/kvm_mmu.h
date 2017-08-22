@@ -546,6 +546,8 @@ void kvm_vcpu_put_hw_mmu(struct kvm_vcpu *vcpu);
 void update_nested_s2_mmu(struct kvm_vcpu *vcpu);
 int kvm_walk_nested_s2(struct kvm_vcpu *vcpu, phys_addr_t gipa,
 		       struct kvm_s2_trans *result);
+int kvm_s2_handle_perm_fault(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
+			     struct kvm_s2_trans *trans);
 int kvm_inject_s2_fault(struct kvm_vcpu *vcpu, u64 esr_el2);
 
 static __always_inline u64 kvm_get_vttbr(struct kvm_s2_mmu *mmu)
