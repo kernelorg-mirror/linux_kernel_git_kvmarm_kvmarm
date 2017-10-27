@@ -51,6 +51,8 @@ static void kvm_timer_update_irq(struct kvm_vcpu *vcpu, bool new_level,
 				 struct arch_timer_context *timer_ctx);
 static bool kvm_timer_should_fire(struct arch_timer_context *timer_ctx);
 
+static DEFINE_STATIC_KEY_FALSE(userspace_irqchip_in_use);
+
 u64 kvm_phys_timer_read(void)
 {
 	return timecounter->cc->read(timecounter->cc);
@@ -572,7 +574,8 @@ static void unmask_vtimer_irq_user(struct kvm_vcpu *vcpu)
  */
 void kvm_timer_sync_hwstate(struct kvm_vcpu *vcpu)
 {
-	unmask_vtimer_irq_user(vcpu);
+	if (static_branch_unlikely(&userspace_irqchip_in_use))
+		unmask_vtimer_irq_user(vcpu);
 }
 
 int kvm_timer_vcpu_reset(struct kvm_vcpu *vcpu)
@@ -777,6 +780,8 @@ void kvm_timer_vcpu_terminate(struct kvm_vcpu *vcpu)
 	soft_timer_cancel(&timer->bg_timer, &timer->expired);
 	soft_timer_cancel(&timer->phys_timer, NULL);
 	kvm_vgic_unmap_phys_irq(vcpu, vtimer->irq.irq);
+	if (timer->enabled && !irqchip_in_kernel(vcpu->kvm))
+		static_branch_dec(&userspace_irqchip_in_use);
 }
 
 static bool timer_irqs_are_valid(struct kvm_vcpu *vcpu)
@@ -830,8 +835,10 @@ int kvm_timer_enable(struct kvm_vcpu *vcpu)
 		return 0;
 
 	/* Without a VGIC we do not map virtual IRQs to physical IRQs */
-	if (!irqchip_in_kernel(vcpu->kvm))
+	if (!irqchip_in_kernel(vcpu->kvm)) {
+		static_branch_inc(&userspace_irqchip_in_use);
 		goto no_vgic;
+	}
 
 	if (!vgic_initialized(vcpu->kvm))
 		return -ENODEV;
