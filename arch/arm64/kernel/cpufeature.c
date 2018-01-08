@@ -1010,20 +1010,6 @@ static bool runs_at_el2(const struct arm64_cpu_capabilities *entry, int __unused
 {
 	return is_kernel_in_hyp_mode();
 }
-
-static void cpu_copy_el2regs(const struct arm64_cpu_capabilities *__unused)
-{
-	/*
-	 * Copy register values that aren't redirected by hardware.
-	 *
-	 * Before code patching, we only set tpidr_el1, all CPUs need to copy
-	 * this value to tpidr_el2 before we patch the code. Once we've done
-	 * that, freshly-onlined CPUs will set tpidr_el2, so we don't need to
-	 * do anything here.
-	 */
-	if (!alternatives_applied)
-		write_sysreg(read_sysreg(tpidr_el1), tpidr_el2);
-}
 #endif
 
 static const struct arm64_cpu_capabilities arm64_features[] = {
@@ -1096,7 +1082,6 @@ static const struct arm64_cpu_capabilities arm64_features[] = {
 		.capability = ARM64_HAS_VIRT_HOST_EXTN,
 		.type = ARM64_CPUCAP_STRICT_BOOT_CPU_FEATURE,
 		.matches = runs_at_el2,
-		.cpu_enable = cpu_copy_el2regs,
 	},
 #endif	/* CONFIG_ARM64_VHE */
 	{
