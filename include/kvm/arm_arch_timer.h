@@ -45,6 +45,10 @@ struct arch_timer_context {
 
 	/* Emulated Timer (may be unused) */
 	struct hrtimer			hrtimer;
+
+	/* Duplicated state from arch_timer.c for convenience */
+	u32				host_timer_irq;
+	u32				host_timer_irq_flags;
 };
 
 enum loaded_timer_state {
@@ -82,6 +86,9 @@ void kvm_timer_vcpu_terminate(struct kvm_vcpu *vcpu);
 u64 kvm_arm_timer_get_reg(struct kvm_vcpu *, u64 regid);
 int kvm_arm_timer_set_reg(struct kvm_vcpu *, u64 regid, u64 value);
 
+u64 kvm_arm_timer_read_sysreg(struct kvm_vcpu *vcpu, u32 sr);
+void kvm_arm_timer_write_sysreg(struct kvm_vcpu *vcpu, u32 sr, u64 val);
+
 int kvm_arm_timer_set_attr(struct kvm_vcpu *vcpu, struct kvm_device_attr *attr);
 int kvm_arm_timer_get_attr(struct kvm_vcpu *vcpu, struct kvm_device_attr *attr);
 int kvm_arm_timer_has_attr(struct kvm_vcpu *vcpu, struct kvm_device_attr *attr);
@@ -101,7 +108,6 @@ bool kvm_arch_timer_get_input_level(int vintid);
 #define vcpu_vtimer(v)	(&(v)->arch.timer_cpu.timers[TIMER_VTIMER])
 #define vcpu_ptimer(v)	(&(v)->arch.timer_cpu.timers[TIMER_PTIMER])
 
-u64 kvm_arm_timer_read_sysreg(struct kvm_vcpu *vcpu, u32 sr);
-void kvm_arm_timer_write_sysreg(struct kvm_vcpu *vcpu, u32 sr, u64 val);
+#define arch_timer_ctx_index(ctx)	((ctx) - vcpu_vtimer((ctx)->vcpu))
 
 #endif
