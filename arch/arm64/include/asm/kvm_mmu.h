@@ -519,6 +519,11 @@ static inline int hyp_map_aux_data(void)
 
 #define kvm_phys_to_vttbr(addr)		phys_to_ttbr(addr)
 
+static inline bool kvm_cpu_has_cnp(void)
+{
+	return system_supports_cnp();
+}
+
 /*
  * Get the magic number 'x' for VTTBR:BADDR of this KVM instance.
  * With v8.2 LVA extensions, 'x' should be a minimum of 6 with
