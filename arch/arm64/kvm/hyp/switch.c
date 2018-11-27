@@ -489,6 +489,10 @@ int kvm_vcpu_run_vhe(struct kvm_vcpu *vcpu)
 	struct kvm_cpu_context *host_ctxt;
 	struct kvm_cpu_context *guest_ctxt;
 	u64 exit_code;
+	u64 tpidr_el1;
+
+	asm("mrs %0, tpidr_el1": "=r" (tpidr_el1));
+	asm("msr tpidr_el2, %0": : "r" (tpidr_el1));
 
 	host_ctxt = vcpu->arch.host_cpu_context;
 	host_ctxt->__hyp_running_vcpu = vcpu;

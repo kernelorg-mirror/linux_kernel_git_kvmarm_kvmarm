@@ -42,6 +42,8 @@ static void __hyp_text __sysreg_save_common_state(struct kvm_cpu_context *ctxt)
 	 * therefore be saved/restored on every entry/exit to/from the guest.
 	 */
 	ctxt->gp_regs.regs.sp		= read_sysreg(sp_el0);
+
+	ctxt->sys_regs[TPIDR_EL1]	= read_sysreg(tpidr_el1);
 }
 
 static void __hyp_text __sysreg_save_user_state(struct kvm_cpu_context *ctxt)
@@ -70,7 +72,6 @@ static void __hyp_text __sysreg_save_el1_state(struct kvm_cpu_context *ctxt)
 	ctxt->sys_regs[AMAIR_EL1]	= read_sysreg_el1(amair);
 	ctxt->sys_regs[CNTKCTL_EL1]	= read_sysreg_el1(cntkctl);
 	ctxt->sys_regs[PAR_EL1]		= read_sysreg(par_el1);
-	ctxt->sys_regs[TPIDR_EL1]	= read_sysreg(tpidr_el1);
 
 	ctxt->gp_regs.sp_el1		= read_sysreg(sp_el1);
 	ctxt->gp_regs.elr_el1		= read_sysreg_el1(elr);
@@ -114,6 +115,8 @@ static void __hyp_text __sysreg_restore_common_state(struct kvm_cpu_context *ctx
 	 * therefore be saved/restored on every entry/exit to/from the guest.
 	 */
 	write_sysreg(ctxt->gp_regs.regs.sp,	  sp_el0);
+
+	write_sysreg(ctxt->sys_regs[TPIDR_EL1],		tpidr_el1);
 }
 
 static void __hyp_text __sysreg_restore_user_state(struct kvm_cpu_context *ctxt)
@@ -142,7 +145,6 @@ static void __hyp_text __sysreg_restore_el1_state(struct kvm_cpu_context *ctxt)
 	write_sysreg_el1(ctxt->sys_regs[AMAIR_EL1],	amair);
 	write_sysreg_el1(ctxt->sys_regs[CNTKCTL_EL1], 	cntkctl);
 	write_sysreg(ctxt->sys_regs[PAR_EL1],		par_el1);
-	write_sysreg(ctxt->sys_regs[TPIDR_EL1],		tpidr_el1);
 
 	write_sysreg(ctxt->gp_regs.sp_el1,		sp_el1);
 	write_sysreg_el1(ctxt->gp_regs.elr_el1,		elr);
