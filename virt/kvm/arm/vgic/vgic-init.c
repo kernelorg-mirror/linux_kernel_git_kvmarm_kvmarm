@@ -467,15 +467,14 @@ static int vgic_init_cpu_dying(unsigned int cpu)
 
 static irqreturn_t vgic_maintenance_handler(int irq, void *data)
 {
+	struct kvm_vcpu *vcpu = data;
+
 	/*
 	 * We cannot rely on the vgic maintenance interrupt to be
 	 * delivered synchronously. This means we can only use it to
 	 * exit the VM, and we perform the handling of EOIed
 	 * interrupts on the exit path (see vgic_fold_lr_state).
 	 */
-
-	struct kvm_vcpu *vcpu = data;
-	bool state;
 
 	/* If not nested, deactivate */
 	if (!vcpu || !vgic_state_is_nested(vcpu)) {
@@ -484,12 +483,7 @@ static irqreturn_t vgic_maintenance_handler(int irq, void *data)
 	}
 
 	/* Assume nested from now */
-	state  = (vcpu->arch.vgic_cpu.nested_vgic_v3.vgic_hcr & ICH_HCR_EN);
-	state &= vgic_v3_get_misr(vcpu);
-
-	kvm_vgic_inject_irq(vcpu->kvm, vcpu->vcpu_id,
-			    vcpu->kvm->arch.vgic.maint_irq, state, vcpu);
-
+	vgic_v3_handle_nested_maint_irq(vcpu);
 	return IRQ_HANDLED;
 }
 
