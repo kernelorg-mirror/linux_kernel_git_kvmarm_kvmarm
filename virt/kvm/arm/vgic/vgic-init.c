@@ -467,7 +467,7 @@ static int vgic_init_cpu_dying(unsigned int cpu)
 
 static irqreturn_t vgic_maintenance_handler(int irq, void *data)
 {
-	struct kvm_vcpu *vcpu = data;
+	struct kvm_vcpu *vcpu = *(struct kvm_vcpu **)data;
 
 	/*
 	 * We cannot rely on the vgic maintenance interrupt to be
