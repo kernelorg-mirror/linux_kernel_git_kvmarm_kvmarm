@@ -110,35 +110,21 @@ void kvm_arch_check_processor_compat(void *rtn)
 	*(int *)rtn = 0;
 }
 
-
 /**
  * kvm_arch_init_vm - initializes a VM data structure
  * @kvm:	pointer to the KVM struct
  */
 int kvm_arch_init_vm(struct kvm *kvm, unsigned long type)
 {
-	int ret, cpu;
+	int ret;
 
 	ret = kvm_arm_setup_stage2(kvm, type);
 	if (ret)
 		return ret;
 
-	kvm->arch.last_vcpu_ran = alloc_percpu(typeof(*kvm->arch.last_vcpu_ran));
-	if (!kvm->arch.last_vcpu_ran)
-		return -ENOMEM;
-
-	for_each_possible_cpu(cpu)
-		*per_cpu_ptr(kvm->arch.last_vcpu_ran, cpu) = -1;
-
-	ret = kvm_alloc_stage2_pgd(&kvm->arch.mmu);
+	ret = kvm_init_stage2_mmu(kvm, &kvm->arch.mmu);
 	if (ret)
-		goto out_fail_alloc;
-
-	/* Mark the initial VMID generation invalid */
-	kvm->arch.mmu.vmid.vmid_gen = 0;
-	kvm->arch.mmu.kvm = kvm;
-	kvm->arch.mmu.vttbr = -1;
-	kvm->arch.mmu.nested_stage2_enabled = false;
+		return ret;
 
 	kvm->arch.nested_mmus = NULL;
 	kvm->arch.nested_mmus_size = 0;
@@ -156,9 +142,6 @@ int kvm_arch_init_vm(struct kvm *kvm, unsigned long type)
 	return ret;
 out_free_stage2_pgd:
 	kvm_free_stage2_pgd(&kvm->arch.mmu);
-out_fail_alloc:
-	free_percpu(kvm->arch.last_vcpu_ran);
-	kvm->arch.last_vcpu_ran = NULL;
 	return ret;
 }
 
@@ -187,9 +170,6 @@ void kvm_arch_destroy_vm(struct kvm *kvm)
 	int i;
 
 	kvm_vgic_destroy(kvm);
-
-	free_percpu(kvm->arch.last_vcpu_ran);
-	kvm->arch.last_vcpu_ran = NULL;
 
 	for (i = 0; i < KVM_MAX_VCPUS; ++i) {
 		if (kvm->vcpus[i]) {
@@ -371,14 +351,17 @@ void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 
 	kvm_vcpu_load_hw_mmu(vcpu);
 
-	last_ran = this_cpu_ptr(vcpu->kvm->arch.last_vcpu_ran);
+	last_ran = this_cpu_ptr(vcpu->arch.hw_mmu->last_vcpu_ran);
 
 	/*
 	 * We might get preempted before the vCPU actually runs, but
 	 * over-invalidation doesn't affect correctness.
 	 */
 	if (*last_ran != vcpu->vcpu_id) {
-		kvm_call_hyp(__kvm_tlb_flush_local_vmid, vcpu);
+		u64 vttbr = kvm_get_vttbr(vcpu->arch.hw_mmu);
+
+		kvm_call_hyp(__kvm_tlb_flush_local_vmid, vttbr);
+
 		*last_ran = vcpu->vcpu_id;
 	}
 
