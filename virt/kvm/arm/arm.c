@@ -65,7 +65,6 @@ static DEFINE_PER_CPU(struct kvm_vcpu *, kvm_arm_running_vcpu);
 /* The VMID used in the VTTBR */
 static atomic64_t kvm_vmid_gen = ATOMIC64_INIT(1);
 static u32 kvm_next_vmid;
-static unsigned int kvm_vmid_bits __read_mostly;
 static DEFINE_SPINLOCK(kvm_vmid_lock);
 
 static bool vgic_present;
@@ -78,11 +77,6 @@ static void kvm_arm_set_running_vcpu(struct kvm_vcpu *vcpu)
 }
 
 DEFINE_STATIC_KEY_FALSE(userspace_irqchip_in_use);
-
-unsigned int get_kvm_vmid_bits(void)
-{
-	return kvm_vmid_bits;
-}
 
 /**
  * kvm_arm_get_running_vcpu - get the vcpu running on the current CPU.
@@ -538,7 +532,7 @@ static void update_vmid(struct kvm_vmid *vmid)
 
 	vmid->vmid = kvm_next_vmid;
 	kvm_next_vmid++;
-	kvm_next_vmid &= (1 << kvm_vmid_bits) - 1;
+	kvm_next_vmid &= (1 << kvm_get_vmid_bits()) - 1;
 
 	smp_wmb();
 	WRITE_ONCE(vmid->vmid_gen, atomic64_read(&kvm_vmid_gen));
@@ -1419,10 +1413,6 @@ static inline void hyp_cpu_pm_exit(void)
 
 static int init_common_resources(void)
 {
-	/* set size of VMID supported by CPU */
-	kvm_vmid_bits = kvm_get_vmid_bits();
-	kvm_info("%d-bit VMID\n", kvm_vmid_bits);
-
 	return 0;
 }
 

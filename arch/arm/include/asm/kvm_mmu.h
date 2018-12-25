@@ -389,14 +389,13 @@ static inline void kvm_nested_s2_wp(struct kvm *kvm) { }
 static inline void kvm_nested_s2_clear(struct kvm *kvm) { }
 static inline void kvm_nested_s2_flush(struct kvm *kvm) { }
 
-static inline u64 kvm_get_vttbr(struct kvm_vmid *vmid,
-				struct kvm_s2_mmu *mmu)
+static __always_inline u64 kvm_get_vttbr(struct kvm_s2_mmu *mmu)
 {
+	struct kvm_vmid *vmid = &mmu->vmid;
 	u64 vmid_field, baddr;
 
-	baddr = virt_to_phys(mmu->pgd);
-	vmid_field = ((u64)vmid->vmid << VTTBR_VMID_SHIFT) &
-		VTTBR_VMID_MASK(get_kvm_vmid_bits());
+	baddr = mmu->pgd_phys;
+	vmid_field = (u64)vmid->vmid << VTTBR_VMID_SHIFT;
 	return kvm_phys_to_vttbr(baddr) | vmid_field;
 }
 

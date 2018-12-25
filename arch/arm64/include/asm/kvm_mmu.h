@@ -548,26 +548,27 @@ int kvm_walk_nested_s2(struct kvm_vcpu *vcpu, phys_addr_t gipa,
 		       struct kvm_s2_trans *result);
 int kvm_s2_handle_perm_fault(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 			     struct kvm_s2_trans *trans);
+int kvm_inject_s2_fault(struct kvm_vcpu *vcpu, u64 esr_el2);
+
 void kvm_nested_s2_unmap(struct kvm_vcpu *vcpu);
 void kvm_nested_s2_free(struct kvm *kvm);
 void kvm_nested_s2_wp(struct kvm *kvm);
 void kvm_nested_s2_clear(struct kvm *kvm);
 void kvm_nested_s2_flush(struct kvm *kvm);
-int kvm_inject_s2_fault(struct kvm_vcpu *vcpu, u64 esr_el2);
 
-static inline u64 kvm_get_vttbr(struct kvm_s2_mmu *mmu)
+static __always_inline u64 kvm_get_vttbr(struct kvm_s2_mmu *mmu)
 {
+	struct kvm_vmid *vmid = &mmu->vmid;
 	u64 vmid_field, baddr;
 
 	baddr = mmu->pgd_phys;
-	vmid_field = ((u64)mmu->vmid.vmid << VTTBR_VMID_SHIFT) &
-		VTTBR_VMID_MASK(get_kvm_vmid_bits());
+	vmid_field = (u64)vmid->vmid << VTTBR_VMID_SHIFT;
 	return kvm_phys_to_vttbr(baddr) | vmid_field;
 }
 
 static inline u64 get_vmid(u64 vttbr)
 {
-	return (vttbr & VTTBR_VMID_MASK(get_kvm_vmid_bits())) >>
+	return (vttbr & VTTBR_VMID_MASK(kvm_get_vmid_bits())) >>
 	       VTTBR_VMID_SHIFT;
 }
 

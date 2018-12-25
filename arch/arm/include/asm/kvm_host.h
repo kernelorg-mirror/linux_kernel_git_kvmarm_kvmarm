@@ -64,10 +64,10 @@ struct kvm_vmid {
 
 struct kvm_s2_mmu {
 	struct kvm_vmid vmid;
-	struct kvm_vmid el2_vmid;
 
 	/* Stage-2 page table */
 	pgd_t *pgd;
+	phys_addr_t pgd_phys;
 };
 
 /* Per shadow VMID mmu structure. This is only for nested virtualization */
@@ -257,7 +257,6 @@ int kvm_arm_copy_reg_indices(struct kvm_vcpu *vcpu, u64 __user *indices);
 int kvm_age_hva(struct kvm *kvm, unsigned long start, unsigned long end);
 int kvm_test_age_hva(struct kvm *kvm, unsigned long hva);
 
-unsigned int get_kvm_vmid_bits(void);
 struct kvm_vcpu *kvm_arm_get_running_vcpu(void);
 struct kvm_vcpu __percpu **kvm_get_running_vcpus(void);
 void kvm_arm_halt_guest(struct kvm *kvm);
