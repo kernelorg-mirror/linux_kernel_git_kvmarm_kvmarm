@@ -108,10 +108,6 @@ int kvm_arch_dev_ioctl_check_extension(struct kvm *kvm, long ext)
 int kvm_reset_vcpu(struct kvm_vcpu *vcpu)
 {
 	const struct kvm_regs *cpu_reset;
-	bool nested = false;
-
-	if (test_bit(KVM_ARM_VCPU_NESTED_VIRT, vcpu->arch.features))
-		nested = true;
 
 	switch (vcpu->arch.target) {
 	default:
@@ -119,7 +115,7 @@ int kvm_reset_vcpu(struct kvm_vcpu *vcpu)
 			if (!cpu_has_32bit_el1())
 				return -EINVAL;
 			cpu_reset = &default_regs_reset32;
-		} else if (nested) {
+		} else if (test_bit(KVM_ARM_VCPU_NESTED_VIRT, vcpu->arch.features)) {
 			cpu_reset = &default_regs_reset_el2;
 		} else {
 			cpu_reset = &default_regs_reset;
