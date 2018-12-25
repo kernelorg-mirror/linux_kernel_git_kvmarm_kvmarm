@@ -75,8 +75,8 @@ static int handle_smc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 	/*
 	 * Forward this trapped smc instruction to the virtual EL2.
 	 */
-	if (forward_nv_traps(vcpu) && (__vcpu_sys_reg(vcpu, HCR_EL2) & HCR_TSC))
-		return kvm_inject_nested_sync(vcpu, kvm_vcpu_get_hsr(vcpu));
+	if ((vcpu_read_sys_reg(vcpu, HCR_EL2) & HCR_TSC) && forward_nv_traps(vcpu))
+		return 1;
 
 	/*
 	 * "If an SMC instruction executed at Non-secure EL1 is
