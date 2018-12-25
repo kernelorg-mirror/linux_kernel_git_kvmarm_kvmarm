@@ -21,6 +21,7 @@
 #include <asm/kvm_coproc.h>
 #include <asm/kvm_emulate.h>
 #include <asm/kvm_mmu.h>
+#include <asm/kvm_nested.h>
 
 #include "trace.h"
 
@@ -75,8 +76,8 @@ void kvm_emulate_nested_eret(struct kvm_vcpu *vcpu)
 	mode = spsr & (PSR_MODE_MASK | PSR_MODE32_BIT);
 
 	direct_eret  = (mode == PSR_MODE_EL0t &&
-			vcpu_el2_e2h_is_set(&vcpu->arch.ctxt) &&
-			vcpu_el2_tge_is_set(&vcpu->arch.ctxt));
+			vcpu_el2_e2h_is_set(vcpu) &&
+			vcpu_el2_tge_is_set(vcpu));
 	direct_eret |= (mode == PSR_MODE_EL2h || mode == PSR_MODE_EL2t);
 
 	if (direct_eret) {
@@ -147,8 +148,8 @@ static int kvm_inject_nested(struct kvm_vcpu *vcpu, u64 esr_el2,
 	mode = pstate & (PSR_MODE_MASK | PSR_MODE32_BIT);
 
 	direct_inject  = (mode == PSR_MODE_EL0t &&
-			  vcpu_el2_e2h_is_set(&vcpu->arch.ctxt) &&
-			  vcpu_el2_tge_is_set(&vcpu->arch.ctxt));
+			  vcpu_el2_e2h_is_set(vcpu) &&
+			  vcpu_el2_tge_is_set(vcpu));
 	direct_inject |= (mode == PSR_MODE_EL2h || mode == PSR_MODE_EL2t);
 
 	if (direct_inject) {
@@ -184,7 +185,7 @@ int kvm_inject_nested_irq(struct kvm_vcpu *vcpu)
 	 * not implemented and EL2 is implemented" in ARM DDI 0487C.a.
 	 */
 
-	if (vcpu_mode_el2(vcpu) && !vcpu_el2_tge_is_set(&vcpu->arch.ctxt) &&
+	if (vcpu_mode_el2(vcpu) && !vcpu_el2_tge_is_set(vcpu) &&
 	    !(__vcpu_sys_reg(vcpu, HCR_EL2) & HCR_IMO))
 		return 1;
 

@@ -594,13 +594,12 @@ static inline int kvm_arm_have_ssbd(void)
 
 void kvm_vcpu_load_sysregs(struct kvm_vcpu *vcpu);
 void kvm_vcpu_put_sysregs(struct kvm_vcpu *vcpu);
-int init_nested_virt(void);
-int kvm_vcpu_init_nested(struct kvm_vcpu *vcpu);
-bool nested_virt_in_use(struct kvm_vcpu *vcpu);
-int handle_wfx_nested(struct kvm_vcpu *vcpu, bool is_wfe);
 
 #define __KVM_HAVE_ARCH_VM_ALLOC
 struct kvm *kvm_arch_alloc_vm(void);
 void kvm_arch_free_vm(struct kvm *kvm);
+
+int kvm_vcpu_init_nested(struct kvm_vcpu *vcpu);
+int handle_wfx_nested(struct kvm_vcpu *vcpu, bool is_wfe);
 
 #endif /* __ARM64_KVM_HOST_H__ */

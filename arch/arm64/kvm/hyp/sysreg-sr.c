@@ -91,7 +91,7 @@ static void __sysreg_save_vel2_state(struct kvm_cpu_context *ctxt)
 	 * _EL2 copy in sys_regs[] is always up-to-date and we don't need
 	 * to save anything here.
 	 */
-	if (vcpu_el2_e2h_is_set(ctxt)) {
+	if (__vcpu_el2_e2h_is_set(ctxt)) {
 		ctxt->sys_regs[SCTLR_EL2]	= read_sysreg_el1(sctlr);
 		ctxt->sys_regs[CPTR_EL2]	= read_sysreg_el1(cpacr);
 		ctxt->sys_regs[TTBR0_EL2]	= read_sysreg_el1(ttbr0);
@@ -196,7 +196,7 @@ static void __sysreg_restore_vel2_state(struct kvm_cpu_context *ctxt)
 	write_sysreg_el1(ctxt->sys_regs[CONTEXTIDR_EL2],contextidr);
 	write_sysreg_el1(ctxt->sys_regs[AMAIR_EL2],	amair);
 
-	if (vcpu_el2_e2h_is_set(ctxt)) {
+	if (__vcpu_el2_e2h_is_set(ctxt)) {
 		/*
 		 * In VHE mode those registers are compatible between
 		 * EL1 and EL2.

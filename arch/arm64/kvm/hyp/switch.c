@@ -102,7 +102,7 @@ static void activate_traps_vhe(struct kvm_vcpu *vcpu)
 		val &= ~CPACR_EL1_FPEN;
 		__activate_traps_fpsimd32(vcpu);
 	}
-	if (vcpu_mode_el2(vcpu) && !vcpu_el2_e2h_is_set(&vcpu->arch.ctxt))
+	if (vcpu_mode_el2(vcpu) && !vcpu_el2_e2h_is_set(vcpu))
 		val |= CPTR_EL2_E2H_TCPAC;
 
 	write_sysreg(val, cpacr_el1);
@@ -134,7 +134,7 @@ static void __hyp_text __activate_traps(struct kvm_vcpu *vcpu)
 
 		hcr |= HCR_NV;
 
-		if (!vcpu_el2_e2h_is_set(&vcpu->arch.ctxt)) {
+		if (!vcpu_el2_e2h_is_set(vcpu)) {
 			/*
 			 * For a guest hypervisor on v8.0, trap and emulate
 			 * the EL1 virtual memory control register accesses
@@ -169,7 +169,7 @@ static void __hyp_text __activate_traps(struct kvm_vcpu *vcpu)
 			 * (TGE clear, then ensure that AT S1 ops are
 			 * trapped too.
 			 */
-			if (!vcpu_el2_tge_is_set(&vcpu->arch.ctxt))
+			if (!vcpu_el2_tge_is_set(vcpu))
 				hcr |= HCR_AT;
 		}
 	}

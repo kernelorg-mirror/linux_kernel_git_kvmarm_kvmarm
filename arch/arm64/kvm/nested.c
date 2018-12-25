@@ -63,23 +63,6 @@ out:
 	return ret;
 }
 
-int init_nested_virt(void)
-{
-	if (cpus_have_const_cap(ARM64_HAS_NESTED_VIRT))
-		kvm_info("ARMv8.3 Nested virtualization is supported\n");
-
-	return 0;
-}
-
-bool nested_virt_in_use(struct kvm_vcpu *vcpu)
-{
-	if (cpus_have_const_cap(ARM64_HAS_NESTED_VIRT)
-	    && test_bit(KVM_ARM_VCPU_NESTED_VIRT, vcpu->arch.features))
-		return true;
-
-	return false;
-}
-
 /*
  * Inject wfx to the virtual EL2 if this is not from the virtual EL2 and
  * the virtual HCR_EL2.TWX is set. Otherwise, let the host hypervisor

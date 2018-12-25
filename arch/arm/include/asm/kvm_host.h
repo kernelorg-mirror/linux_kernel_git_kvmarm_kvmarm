@@ -380,14 +380,4 @@ static inline void kvm_vcpu_put_sysregs(struct kvm_vcpu *vcpu) {}
 struct kvm *kvm_arch_alloc_vm(void);
 void kvm_arch_free_vm(struct kvm *kvm);
 
-static inline int init_nested_virt(void)
-{
-	return 0;
-}
-
-static inline bool nested_virt_in_use(struct kvm_vcpu *vcpu)
-{
-	return false;
-}
-
 #endif /* __ARM_KVM_HOST_H__ */

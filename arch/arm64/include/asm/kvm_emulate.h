@@ -28,6 +28,7 @@
 #include <asm/kvm_arm.h>
 #include <asm/kvm_hyp.h>
 #include <asm/kvm_mmio.h>
+#include <asm/kvm_nested.h>
 #include <asm/ptrace.h>
 #include <asm/cputype.h>
 #include <asm/virt.h>
@@ -224,14 +225,24 @@ static inline bool vcpu_mode_el2(const struct kvm_vcpu *vcpu)
 	return vcpu_mode_el2_ctxt(&vcpu->arch.ctxt);
 }
 
-static inline bool vcpu_el2_e2h_is_set(const struct kvm_cpu_context *ctxt)
+static inline bool __vcpu_el2_e2h_is_set(const struct kvm_cpu_context *ctxt)
 {
 	return ctxt->sys_regs[HCR_EL2] & HCR_E2H;
 }
 
-static inline bool vcpu_el2_tge_is_set(const struct kvm_cpu_context *ctxt)
+static inline bool vcpu_el2_e2h_is_set(const struct kvm_vcpu *vcpu)
+{
+	return __vcpu_el2_e2h_is_set(&vcpu->arch.ctxt);
+}
+
+static inline bool __vcpu_el2_tge_is_set(const struct kvm_cpu_context *ctxt)
 {
 	return ctxt->sys_regs[HCR_EL2] & HCR_TGE;
+}
+
+static inline bool vcpu_el2_tge_is_set(const struct kvm_vcpu *vcpu)
+{
+	return __vcpu_el2_tge_is_set(&vcpu->arch.ctxt);
 }
 
 static inline bool __is_hyp_ctxt(const struct kvm_cpu_context *ctxt)
@@ -241,12 +252,9 @@ static inline bool __is_hyp_ctxt(const struct kvm_cpu_context *ctxt)
 	 * E2H and TGE bits are set. The latter means we are in the user space
 	 * of the VHE kernel. ARMv8.1 ARM describes this as 'InHost'
 	 */
-	if (vcpu_mode_el2_ctxt(ctxt) ||
-	    (vcpu_el2_e2h_is_set(ctxt) && vcpu_el2_tge_is_set(ctxt)) ||
-	    WARN_ON(vcpu_el2_tge_is_set(ctxt)))
-		return true;
-
-	return false;
+	return vcpu_mode_el2_ctxt(ctxt) ||
+		(__vcpu_el2_e2h_is_set(ctxt) && __vcpu_el2_tge_is_set(ctxt)) ||
+		WARN_ON(__vcpu_el2_tge_is_set(ctxt));
 }
 
 static inline bool is_hyp_ctxt(const struct kvm_vcpu *vcpu)
@@ -256,7 +264,7 @@ static inline bool is_hyp_ctxt(const struct kvm_vcpu *vcpu)
 
 static inline u64 __fixup_spsr_el2_write(struct kvm_cpu_context *ctxt, u64 val)
 {
-	if (!vcpu_el2_e2h_is_set(ctxt)) {
+	if (!__vcpu_el2_e2h_is_set(ctxt)) {
 		/*
 		 * Clear the .M field when writing SPSR to the CPU, so that we
 		 * can detect when the CPU clobbered our SPSR copy during a
@@ -270,7 +278,7 @@ static inline u64 __fixup_spsr_el2_write(struct kvm_cpu_context *ctxt, u64 val)
 
 static inline u64 __fixup_spsr_el2_read(const struct kvm_cpu_context *ctxt, u64 val)
 {
-	if (vcpu_el2_e2h_is_set(ctxt))
+	if (__vcpu_el2_e2h_is_set(ctxt))
 		return val;
 
 	/*

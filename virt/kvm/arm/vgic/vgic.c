@@ -22,6 +22,7 @@
 #include <linux/nospec.h>
 
 #include <asm/kvm_hyp.h>
+#include <asm/kvm_nested.h>
 
 #include "vgic.h"
 

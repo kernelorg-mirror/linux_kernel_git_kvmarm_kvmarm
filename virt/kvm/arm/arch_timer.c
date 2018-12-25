@@ -27,6 +27,7 @@
 #include <asm/arch_timer.h>
 #include <asm/kvm_emulate.h>
 #include <asm/kvm_hyp.h>
+#include <asm/kvm_nested.h>
 
 #include <kvm/arm_vgic.h>
 #include <kvm/arm_arch_timer.h>
@@ -893,7 +894,7 @@ static struct arch_timer_context *get_timer_from_sysreg(struct kvm_vcpu *vcpu,
 	case SYS_CNTP_CTL_EL0:
 	case SYS_CNTP_CVAL_EL0:
 		if (vcpu_mode_el2(vcpu) &&
-		    vcpu_el2_e2h_is_set(&vcpu->arch.ctxt))
+		    vcpu_el2_e2h_is_set(vcpu))
 			return vcpu_hptimer(vcpu);
 		/* fall through */
 

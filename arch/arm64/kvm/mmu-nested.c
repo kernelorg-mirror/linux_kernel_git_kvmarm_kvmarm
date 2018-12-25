@@ -21,6 +21,7 @@
 #include <asm/kvm_arm.h>
 #include <asm/kvm_emulate.h>
 #include <asm/kvm_mmu.h>
+#include <asm/kvm_nested.h>
 
 struct s2_walk_info {
 	unsigned int pgshift;

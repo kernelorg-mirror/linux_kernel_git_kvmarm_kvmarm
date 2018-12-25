@@ -172,7 +172,7 @@ void __kvm_at_s1e2(struct kvm_vcpu *vcpu, u32 op, u64 vaddr)
 	/* We've trapped, so everything is live on the CPU. */
 	__mmu_config_save(&config);
 
-	if (vcpu_el2_e2h_is_set(ctxt)) {
+	if (vcpu_el2_e2h_is_set(vcpu)) {
 		write_sysreg_el1(ctxt->sys_regs[TTBR0_EL2],	ttbr0);
 		write_sysreg_el1(ctxt->sys_regs[TTBR1_EL2],	ttbr1);
 		write_sysreg_el1(ctxt->sys_regs[TCR_EL2],	tcr);

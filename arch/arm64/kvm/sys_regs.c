@@ -38,6 +38,7 @@
 #include <asm/kvm_host.h>
 #include <asm/kvm_hyp.h>
 #include <asm/kvm_mmu.h>
+#include <asm/kvm_nested.h>
 #include <asm/perf_event.h>
 #include <asm/sysreg.h>
 
@@ -255,7 +256,7 @@ u64 vcpu_read_sys_reg(const struct kvm_vcpu *vcpu, int reg)
 		if (el2_reg->mapping == __INVALID_SYSREG__)
 			goto memory_read;
 
-		if (!vcpu_el2_e2h_is_set(&vcpu->arch.ctxt) &&
+		if (!vcpu_el2_e2h_is_set(vcpu) &&
 		    el2_reg->translate)
 			goto memory_read;
 
@@ -351,7 +352,7 @@ void vcpu_write_sys_reg(struct kvm_vcpu *vcpu, u64 val, int reg)
 		if (el2_reg->mapping == __INVALID_SYSREG__)
 			goto memory_write;
 
-		if (!vcpu_el2_e2h_is_set(&vcpu->arch.ctxt) &&
+		if (!vcpu_el2_e2h_is_set(vcpu) &&
 		    el2_reg->translate)
 			val = el2_reg->translate(val);
 
