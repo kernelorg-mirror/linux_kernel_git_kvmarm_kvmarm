@@ -345,6 +345,12 @@ static inline bool vcpu_mode_priv(const struct kvm_vcpu *vcpu)
 	return mode != PSR_MODE_EL0t;
 }
 
+static inline bool guest_hyp_fpsimd_traps_enabled(const struct kvm_vcpu *vcpu)
+{
+	return nested_virt_in_use(vcpu) &&
+		(vcpu_read_sys_reg(vcpu, CPTR_EL2) & CPTR_EL2_TFP);
+}
+
 /*
  * When the NV and NV1 bits are set, the EL2 page table format is used for the
  * EL1 translation regime.

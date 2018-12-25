@@ -110,15 +110,16 @@ static int handle_smc(struct kvm_vcpu *vcpu, struct kvm_run *run)
 }
 
 /*
- * When the system supports FP/ASMID and we are NOT running nested
- * virtualization, FP/ASMID traps are handled in EL2 directly.
- * This handler handles the cases those are not belong to the above case.
+ * This handles the cases where the system does not support FP/ASIMD or when
+ * we are running nested virtualization and the guest hypervisor is trapping
+ * FP/ASIMD accesses by its guest guest.
+ *
+ * All other handling of guest vs. host FP/ASIMD register state is handled in
+ * fixup_guest_exit().
  */
 static int kvm_handle_fpasimd(struct kvm_vcpu *vcpu, struct kvm_run *run)
 {
-
-	/* This is for nested virtualization */
-	if (vcpu_read_sys_reg(vcpu, CPTR_EL2) & CPTR_EL2_TFP)
+	if (guest_hyp_fpsimd_traps_enabled(vcpu))
 		return kvm_inject_nested_sync(vcpu, kvm_vcpu_get_hsr(vcpu));
 
 	/* This is the case when the system doesn't support FP/ASIMD. */
