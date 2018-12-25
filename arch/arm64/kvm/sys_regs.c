@@ -221,7 +221,7 @@ static bool __vcpu_read_sys_reg_from_cpu(int reg, u64 *val)
 	case DBGVCR32_EL2:	*val = read_sysreg_s(SYS_DBGVCR32_EL2);	break;
 	default:		return false;
 	}
-	
+
 	return true;
 }
 
@@ -3160,7 +3160,6 @@ static int emulate_sys_reg(struct kvm_vcpu *vcpu,
 
 static int emulate_sys_instr(struct kvm_vcpu *vcpu, struct sys_reg_params *p)
 {
-
 	const struct sys_reg_desc *r;
 
 	/* Search from the system instruction table. */
