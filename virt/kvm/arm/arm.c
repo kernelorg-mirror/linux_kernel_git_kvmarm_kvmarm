@@ -137,6 +137,11 @@ int kvm_arch_init_vm(struct kvm *kvm, unsigned long type)
 	/* Mark the initial VMID generation invalid */
 	kvm->arch.mmu.vmid.vmid_gen = 0;
 	kvm->arch.mmu.kvm = kvm;
+	kvm->arch.mmu.vttbr = -1;
+	kvm->arch.mmu.nested_stage2_enabled = false;
+
+	kvm->arch.nested_mmus = NULL;
+	kvm->arch.nested_mmus_size = 0;
 
 	ret = create_hyp_mappings(kvm, kvm + 1, PAGE_HYP);
 	if (ret)
@@ -364,6 +369,8 @@ void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 {
 	int *last_ran;
 
+	kvm_vcpu_load_hw_mmu(vcpu);
+
 	last_ran = this_cpu_ptr(vcpu->kvm->arch.last_vcpu_ran);
 
 	/*
@@ -396,6 +403,7 @@ void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu)
 	kvm_vcpu_put_sysregs(vcpu);
 	kvm_timer_vcpu_put(vcpu);
 	kvm_vgic_put(vcpu);
+	kvm_vcpu_put_hw_mmu(vcpu);
 
 	vcpu->cpu = -1;
 
@@ -962,6 +970,17 @@ static int kvm_vcpu_set_target(struct kvm_vcpu *vcpu,
 	vcpu->arch.target = phys_target;
 
 	/* Now we know what it is, we can reset it. */
+	if (test_bit(KVM_ARM_VCPU_NESTED_VIRT, vcpu->arch.features)) {
+		int ret;
+
+		if (!cpus_have_const_cap(ARM64_HAS_NESTED_VIRT))
+			return -EINVAL;
+
+		ret = kvm_vcpu_init_nested(vcpu);
+		if (ret)
+			return ret;
+	}
+
 	return kvm_reset_vcpu(vcpu);
 }
 
