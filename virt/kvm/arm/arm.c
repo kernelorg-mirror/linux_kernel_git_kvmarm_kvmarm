@@ -358,10 +358,7 @@ void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 	 * over-invalidation doesn't affect correctness.
 	 */
 	if (*last_ran != vcpu->vcpu_id) {
-		u64 vttbr = kvm_get_vttbr(vcpu->arch.hw_mmu);
-
-		kvm_call_hyp(__kvm_tlb_flush_local_vmid, vttbr);
-
+		kvm_call_hyp(__kvm_tlb_flush_local_vmid, vcpu);
 		*last_ran = vcpu->vcpu_id;
 	}
 
