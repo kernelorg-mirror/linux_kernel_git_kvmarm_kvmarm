@@ -2223,24 +2223,19 @@ static bool handle_s12w(struct kvm_vcpu *vcpu, struct sys_reg_params *p,
 static bool handle_alle2is(struct kvm_vcpu *vcpu, struct sys_reg_params *p,
 			   const struct sys_reg_desc *r)
 {
-	struct kvm_s2_mmu *mmu = &vcpu->kvm->arch.mmu;
-	u64 vttbr = kvm_get_vttbr(mmu);
-
 	/*
 	 * To emulate invalidating all EL2 regime stage 1 TLB entries for all
 	 * PEs, executing TLBI VMALLE1IS is enough. But reuse the existing
 	 * interface for the simplicity; invalidating stage 2 entries doesn't
 	 * affect the correctness.
 	 */
-	kvm_call_hyp(__kvm_tlb_flush_vmid, vttbr);
+	kvm_call_hyp(__kvm_tlb_flush_vmid, &vcpu->kvm->arch.mmu);
 	return true;
 }
 
 static bool handle_vae2(struct kvm_vcpu *vcpu, struct sys_reg_params *p,
 		       const struct sys_reg_desc *r)
 {
-	struct kvm_s2_mmu *mmu = &vcpu->kvm->arch.mmu;
-	u64 vttbr = kvm_get_vttbr(mmu);
 	int sys_encoding = sys_insn(p->Op0, p->Op1, p->CRn, p->CRm, p->Op2);
 
 	/*
@@ -2249,7 +2244,8 @@ static bool handle_vae2(struct kvm_vcpu *vcpu, struct sys_reg_params *p,
 	 * instructions with the virtual EL2's VMID assigned by the host
 	 * hypervisor.
 	 */
-	kvm_call_hyp(__kvm_tlb_vae2, vttbr, p->regval, sys_encoding);
+	kvm_call_hyp(__kvm_tlb_vae2, &vcpu->kvm->arch.mmu,
+		     p->regval, sys_encoding);
 	return true;
 }
 
@@ -2257,8 +2253,6 @@ static bool handle_alle1is(struct kvm_vcpu *vcpu, struct sys_reg_params *p,
 			   const struct sys_reg_desc *r)
 {
 	struct kvm_s2_mmu *mmu = &vcpu->kvm->arch.mmu;
-	u64 vttbr = kvm_get_vttbr(mmu);
-
 	spin_lock(&vcpu->kvm->mmu_lock);
 
 	/*
@@ -2272,7 +2266,7 @@ static bool handle_alle1is(struct kvm_vcpu *vcpu, struct sys_reg_params *p,
 		 * Invalidate the stage 1 and 2 TLB entries for the host OS
 		 * in a VM only if there is one.
 		 */
-		kvm_call_hyp(__kvm_tlb_flush_vmid, vttbr);
+		kvm_call_hyp(__kvm_tlb_flush_vmid, mmu);
 	}
 
 	spin_unlock(&vcpu->kvm->mmu_lock);
@@ -2383,14 +2377,12 @@ static bool handle_tlbi_el1(struct kvm_vcpu *vcpu, struct sys_reg_params *p,
 	mmu = lookup_s2_mmu(vcpu->kvm, virtual_vttbr, HCR_VM);
 	if (mmu)
 		kvm_call_hyp(__kvm_tlb_el1_instr,
-			     kvm_get_vttbr(mmu),
-			     p->regval, sys_encoding);
+			     mmu, p->regval, sys_encoding);
 
 	mmu = lookup_s2_mmu(vcpu->kvm, virtual_vttbr, 0);
 	if (mmu)
 		kvm_call_hyp(__kvm_tlb_el1_instr,
-			     kvm_get_vttbr(mmu),
-			     p->regval, sys_encoding);
+			     mmu, p->regval, sys_encoding);
 	mutex_unlock(&vcpu->kvm->lock);
 
 	return true;
