@@ -889,13 +889,34 @@ static struct arch_timer_context *get_timer_from_sysreg(struct kvm_vcpu *vcpu,
 	case SYS_CNTP_TVAL_EL0:
 	case SYS_CNTP_CTL_EL0:
 	case SYS_CNTP_CVAL_EL0:
+		if (vcpu_mode_el2(vcpu) &&
+		    vcpu_el2_e2h_is_set(vcpu))
+			return vcpu_hptimer(vcpu);
+		/* fall through */
+
+	case cntp_tval_EL02:
+	case cntp_ctl_EL02:
+	case cntp_cval_EL02:
 	case SYS_AARCH32_CNTP_TVAL:
 	case SYS_AARCH32_CNTP_CTL:
 	case SYS_AARCH32_CNTP_CVAL:
 		return vcpu_ptimer(vcpu);
 
 	case SYS_CNTVOFF_EL2:
+	case cntv_tval_EL02:
+	case cntv_ctl_EL02:
+	case cntv_cval_EL02:
 		return vcpu_vtimer(vcpu);
+
+	case SYS_CNTHP_TVAL_EL2:
+	case SYS_CNTHP_CTL_EL2:
+	case SYS_CNTHP_CVAL_EL2:
+		return vcpu_hptimer(vcpu);
+
+	case SYS_CNTHV_TVAL_EL2:
+	case SYS_CNTHV_CTL_EL2:
+	case SYS_CNTHV_CVAL_EL2:
+		return vcpu_hvtimer(vcpu);
 
 	default:
 		BUG();
@@ -914,16 +935,28 @@ u64 kvm_arm_timer_read_sysreg(struct kvm_vcpu *vcpu, u32 sr)
 
 	switch (sr) {
 	case SYS_CNTP_TVAL_EL0:
+	case cntp_tval_EL02:
+	case cntv_tval_EL02:
+	case SYS_CNTHP_TVAL_EL2:
+	case SYS_CNTHV_TVAL_EL2:
 	case SYS_AARCH32_CNTP_TVAL:
 		val = kvm_phys_timer_read() - timer->cntvoff - timer->cnt_cval;
 		break;
 
 	case SYS_CNTP_CTL_EL0:
+	case cntp_ctl_EL02:
+	case cntv_ctl_EL02:
+	case SYS_CNTHP_CTL_EL2:
+	case SYS_CNTHV_CTL_EL2:
 	case SYS_AARCH32_CNTP_CTL:
 		val = read_timer_ctl(timer);
 		break;
 
 	case SYS_CNTP_CVAL_EL0:
+	case cntp_cval_EL02:
+	case cntv_cval_EL02:
+	case SYS_CNTHP_CVAL_EL2:
+	case SYS_CNTHV_CVAL_EL2:
 	case SYS_AARCH32_CNTP_CVAL:
 		val = timer->cnt_cval;
 		break;
@@ -953,16 +986,28 @@ void kvm_arm_timer_write_sysreg(struct kvm_vcpu *vcpu, u32 sr, u64 val)
 
 	switch (sr) {
 	case SYS_CNTP_TVAL_EL0:
+	case cntp_tval_EL02:
+	case cntv_tval_EL02:
+	case SYS_CNTHP_TVAL_EL2:
+	case SYS_CNTHV_TVAL_EL2:
 	case SYS_AARCH32_CNTP_TVAL:
 		timer->cnt_cval = val - kvm_phys_timer_read() - timer->cntvoff;
 		break;
 
 	case SYS_CNTP_CTL_EL0:
+	case cntp_ctl_EL02:
+	case cntv_ctl_EL02:
+	case SYS_CNTHP_CTL_EL2:
+	case SYS_CNTHV_CTL_EL2:
 	case SYS_AARCH32_CNTP_CTL:
 		timer->cnt_ctl = val & ~ARCH_TIMER_CTRL_IT_STAT;
 		break;
 
 	case SYS_CNTP_CVAL_EL0:
+	case cntp_cval_EL02:
+	case cntv_cval_EL02:
+	case SYS_CNTHP_CVAL_EL2:
+	case SYS_CNTHV_CVAL_EL2:
 	case SYS_AARCH32_CNTP_CVAL:
 		timer->cnt_cval = val;
 		break;
