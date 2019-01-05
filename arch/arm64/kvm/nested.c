@@ -369,7 +369,7 @@ static struct kvm_s2_mmu *get_s2_mmu_nested(struct kvm_vcpu *vcpu)
 		/* Clear the old state */
 		kvm_unmap_stage2_range(s2_mmu, 0, kvm_phys_size(kvm));
 		if (s2_mmu->vmid.vmid_gen)
-			kvm_call_hyp(__kvm_tlb_flush_vmid, kvm_get_vttbr(s2_mmu));
+			kvm_call_hyp(__kvm_tlb_flush_vmid, s2_mmu);
 	} else {
 		s2_mmu->usage_count = 0;
 	}
