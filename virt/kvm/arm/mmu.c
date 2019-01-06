@@ -969,9 +969,9 @@ int kvm_init_stage2_mmu(struct kvm *kvm, struct kvm_s2_mmu *mmu)
 	mmu->pgd = pgd;
 	mmu->pgd_phys = virt_to_phys(pgd);
 	mmu->vmid.vmid_gen = 0;
-	mmu->vttbr = -1;
+	mmu->vttbr = 1;
 	mmu->nested_stage2_enabled = false;
-	mmu->usage_count = -1;
+	atomic_set(&mmu->refcnt, 0);
 	for_each_possible_cpu(cpu)
 		*per_cpu_ptr(mmu->last_vcpu_ran, cpu) = -1;
 
@@ -2482,9 +2482,9 @@ void kvm_arch_flush_shadow_all(struct kvm *kvm)
 	for (i = 0; i < kvm->arch.nested_mmus_size; i++) {
 		struct kvm_s2_mmu *mmu = &kvm->arch.nested_mmus[i];
 
-		WARN_ON(mmu->usage_count > 0);
+		WARN_ON(atomic_read(&mmu->refcnt));
 
-		if (mmu->usage_count == 0)
+		if (!atomic_read(&mmu->refcnt))
 			kvm_free_stage2_pgd(mmu);
 	}
 	kfree(kvm->arch.nested_mmus);
