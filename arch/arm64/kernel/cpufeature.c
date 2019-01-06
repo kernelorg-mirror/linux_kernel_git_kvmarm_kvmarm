@@ -1075,9 +1075,9 @@ static void cpu_copy_el2regs(const struct arm64_cpu_capabilities *__unused)
 
 static bool nested_param;
 static bool has_nested_virt_support(const struct arm64_cpu_capabilities *cap,
-				    int __unused)
+				    int scope)
 {
-	return has_cpuid_feature(cap, SCOPE_LOCAL_CPU) &&
+	return has_cpuid_feature(cap, scope) &&
 		nested_param;
 }
 
