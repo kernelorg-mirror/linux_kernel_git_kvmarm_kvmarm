@@ -319,12 +319,12 @@ struct kvm_s2_mmu *lookup_s2_mmu(struct kvm *kvm, u64 vttbr, u64 hcr)
 	for (i = 0; i < kvm->arch.nested_mmus_size; i++) {
 		struct kvm_s2_mmu *mmu = &kvm->arch.nested_mmus[i];
 
-		if (mmu->usage_count < 0)
+		if (!kvm_s2_mmu_valid(mmu))
 			continue;
 
 		if (nested_stage2_enabled &&
 		    mmu->nested_stage2_enabled &&
-		    vttbr == (mmu->vttbr & ~1UL))
+		    vttbr == mmu->vttbr)
 			return mmu;
 
 		if (!nested_stage2_enabled &&
@@ -357,21 +357,19 @@ static struct kvm_s2_mmu *get_s2_mmu_nested(struct kvm_vcpu *vcpu)
 	     i++) {
 		s2_mmu = &kvm->arch.nested_mmus[i % kvm->arch.nested_mmus_size];
 
-		if (s2_mmu->usage_count <= 0)
+		if (atomic_read(&s2_mmu->refcnt) == 0)
 			break;
 	}
-	BUG_ON(s2_mmu->usage_count > 0); /* We have struct MMUs to spare */
+	BUG_ON(atomic_read(&s2_mmu->refcnt)); /* We have struct MMUs to spare */
 
 	/* Set the scene for the next search */
 	kvm->arch.nested_mmus_next = (i + 1) % kvm->arch.nested_mmus_size;
 
-	if (s2_mmu->usage_count == 0) {
+	if (kvm_s2_mmu_valid(s2_mmu)) {
 		/* Clear the old state */
 		kvm_unmap_stage2_range(s2_mmu, 0, kvm_phys_size(kvm));
 		if (s2_mmu->vmid.vmid_gen)
 			kvm_call_hyp(__kvm_tlb_flush_vmid, s2_mmu);
-	} else {
-		s2_mmu->usage_count = 0;
 	}
 
 	/*
@@ -382,28 +380,27 @@ static struct kvm_s2_mmu *get_s2_mmu_nested(struct kvm_vcpu *vcpu)
 	s2_mmu->nested_stage2_enabled = hcr & HCR_VM;
 
 out:
-	s2_mmu->usage_count++;
+	atomic_inc(&s2_mmu->refcnt);
 	return s2_mmu;
 }
 
 void kvm_vcpu_load_hw_mmu(struct kvm_vcpu *vcpu)
 {
-	spin_lock(&vcpu->kvm->mmu_lock);
-	if (is_hyp_ctxt(vcpu))
+	if (is_hyp_ctxt(vcpu)) {
 		vcpu->arch.hw_mmu = &vcpu->kvm->arch.mmu;
-	else
+	} else {
+		spin_lock(&vcpu->kvm->mmu_lock);
 		vcpu->arch.hw_mmu = get_s2_mmu_nested(vcpu);
-	spin_unlock(&vcpu->kvm->mmu_lock);
+		spin_unlock(&vcpu->kvm->mmu_lock);
+	}
 }
 
 void kvm_vcpu_put_hw_mmu(struct kvm_vcpu *vcpu)
 {
-	spin_lock(&vcpu->kvm->mmu_lock);
 	if (vcpu->arch.hw_mmu != &vcpu->kvm->arch.mmu) {
-		vcpu->arch.hw_mmu->usage_count--;
+		atomic_dec(&vcpu->arch.hw_mmu->refcnt);
 		vcpu->arch.hw_mmu = NULL;
 	}
-	spin_unlock(&vcpu->kvm->mmu_lock);
 }
 
 /*
@@ -452,7 +449,7 @@ void kvm_nested_s2_wp(struct kvm *kvm)
 	for (i = 0; i < kvm->arch.nested_mmus_size; i++) {
 		struct kvm_s2_mmu *mmu = &kvm->arch.nested_mmus[i];
 
-		if (mmu->usage_count >= 0)
+		if (kvm_s2_mmu_valid(mmu))
 			kvm_stage2_wp_range(mmu, 0, kvm_phys_size(kvm));
 	}
 }
@@ -465,7 +462,7 @@ void kvm_nested_s2_clear(struct kvm *kvm)
 	for (i = 0; i < kvm->arch.nested_mmus_size; i++) {
 		struct kvm_s2_mmu *mmu = &kvm->arch.nested_mmus[i];
 
-		if (mmu->usage_count >= 0)
+		if (kvm_s2_mmu_valid(mmu))
 			kvm_unmap_stage2_range(mmu, 0, kvm_phys_size(kvm));
 	}
 }
@@ -478,7 +475,7 @@ void kvm_nested_s2_flush(struct kvm *kvm)
 	for (i = 0; i < kvm->arch.nested_mmus_size; i++) {
 		struct kvm_s2_mmu *mmu = &kvm->arch.nested_mmus[i];
 
-		if (mmu->usage_count >= 0)
+		if (kvm_s2_mmu_valid(mmu))
 			kvm_stage2_flush_range(mmu, 0, kvm_phys_size(kvm));
 	}
 }

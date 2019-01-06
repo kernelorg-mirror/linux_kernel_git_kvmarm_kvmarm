@@ -81,7 +81,8 @@ struct kvm_s2_mmu {
 
 	/*
 	 * For a shadow stage-2 MMU, the virtual vttbr programmed by the guest
-	 * hypervisor.  Unused for kvm_arch->mmu.
+	 * hypervisor.  Unused for kvm_arch->mmu. Set to 1 when the structure
+	 * contains no valid information.
 	 */
 	u64	vttbr;
 
@@ -89,15 +90,19 @@ struct kvm_s2_mmu {
 	bool	nested_stage2_enabled;
 
 	/*
-	 * -1: This is brand new
-	 *  0: Nobody is currently using this, but it holds valid data
+	 *  0: Nobody is currently using this, check vttbr for validity
 	 * >0: Somebody is actively using this.
 	 */
-	int usage_count;
+	atomic_t refcnt;
 
 	/* The last vcpu id that ran on each physical CPU */
 	int __percpu *last_vcpu_ran;
 };
+
+static inline bool kvm_s2_mmu_valid(struct kvm_s2_mmu *mmu)
+{
+	return !(mmu->vttbr & 1);
+}
 
 struct kvm_arch {
 	struct kvm_s2_mmu mmu;
