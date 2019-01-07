@@ -208,10 +208,12 @@ void __hyp_text __kvm_flush_vm_context(void)
 
 void __hyp_text __kvm_tlb_vae2(struct kvm_s2_mmu *mmu, u64 va, u64 sys_encoding)
 {
+	struct tlb_inv_context cxt;
+
 	dsb(ishst);
 
 	/* Switch to requested VMID */
-	__tlb_switch_to_guest()(mmu);
+	__tlb_switch_to_guest()(mmu, &cxt);
 
 	/*
 	 * Execute the EL1 version of TLBI VAE2* instruction, forcing
@@ -233,15 +235,17 @@ void __hyp_text __kvm_tlb_vae2(struct kvm_s2_mmu *mmu, u64 va, u64 sys_encoding)
 	dsb(ish);
 	isb();
 
-	__tlb_switch_to_host()();
+	__tlb_switch_to_host()(&cxt);
 }
 
 void __hyp_text __kvm_tlb_el1_instr(struct kvm_s2_mmu *mmu, u64 val, u64 sys_encoding)
 {
+	struct tlb_inv_context cxt;
+
 	dsb(ishst);
 
 	/* Switch to requested VMID */
-	__tlb_switch_to_guest()(mmu);
+	__tlb_switch_to_guest()(mmu, &cxt);
 
 	/*
 	 * Execute the same instruction as the guest hypervisor did,
@@ -280,5 +284,5 @@ void __hyp_text __kvm_tlb_el1_instr(struct kvm_s2_mmu *mmu, u64 val, u64 sys_enc
 	dsb(ish);
 	isb();
 
-	__tlb_switch_to_host()();
+	__tlb_switch_to_host()(&cxt);
 }
