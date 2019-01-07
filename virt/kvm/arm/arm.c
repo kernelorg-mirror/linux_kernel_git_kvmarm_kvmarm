@@ -349,7 +349,8 @@ void kvm_arch_vcpu_load(struct kvm_vcpu *vcpu, int cpu)
 {
 	int *last_ran;
 
-	kvm_vcpu_load_hw_mmu(vcpu);
+	if (nested_virt_in_use(vcpu))
+		kvm_vcpu_load_hw_mmu(vcpu);
 
 	last_ran = this_cpu_ptr(vcpu->arch.hw_mmu->last_vcpu_ran);
 
@@ -383,7 +384,8 @@ void kvm_arch_vcpu_put(struct kvm_vcpu *vcpu)
 	kvm_vcpu_put_sysregs(vcpu);
 	kvm_timer_vcpu_put(vcpu);
 	kvm_vgic_put(vcpu);
-	kvm_vcpu_put_hw_mmu(vcpu);
+	if (nested_virt_in_use(vcpu))
+		kvm_vcpu_put_hw_mmu(vcpu);
 
 	vcpu->cpu = -1;
 
