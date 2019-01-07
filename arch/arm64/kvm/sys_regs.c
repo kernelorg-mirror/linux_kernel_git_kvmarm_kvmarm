@@ -87,7 +87,7 @@ static u64 tcr_el2_ips_to_tcr_el1_ps(u64 tcr_el2)
 
 u64 translate_tcr(u64 tcr)
 {
-	return TCR_EPD1 |				/* disable TTBR1_EL1 */
+	return TCR_EPD1_MASK |				/* disable TTBR1_EL1 */
 	       ((tcr & TCR_EL2_TBI) ? TCR_TBI0 : 0) |
 	       tcr_el2_ips_to_tcr_el1_ps(tcr) |
 	       (tcr & TCR_EL2_TG0_MASK) |
