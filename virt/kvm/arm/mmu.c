@@ -1828,8 +1828,8 @@ static int user_mem_abort(struct kvm_vcpu *vcpu, phys_addr_t fault_ipa,
 	 * actually allowed it (see kvm_s2_handle_perm_fault).
 	 */
 	if (kvm_is_shadow_s2_fault(vcpu)) {
-		writable &= !nested->writable;
-		readable &= !nested->readable;
+		writable &= nested->writable;
+		readable &= nested->readable;
 	}
 
 	spin_lock(&kvm->mmu_lock);
