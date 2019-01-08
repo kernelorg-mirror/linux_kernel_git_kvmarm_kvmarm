@@ -588,7 +588,7 @@ static inline void __hyp_text __kvm_skip_instr(struct kvm_vcpu *vcpu)
 
 static inline bool kvm_is_shadow_s2_fault(struct kvm_vcpu *vcpu)
 {
-	return (vcpu_read_sys_reg(vcpu, HCR_EL2) & HCR_VM) && !is_hyp_ctxt(vcpu);
+	return vcpu->arch.hw_mmu != &vcpu->kvm->arch.mmu;
 }
 
 #endif /* __ARM64_KVM_EMULATE_H__ */
