@@ -241,6 +241,11 @@ static void __hyp_text __sysreg_restore_vel1_state(struct kvm_cpu_context *ctxt)
 	if (has_vhe()) {
 		struct kvm_vcpu *vcpu;
 
+		/*
+		 * Warning: this hack only works on VHE, because we only
+		 * call this with the *guest* context, which is part of
+		 * struct kvm_vcpu. On a host context, you'd get pure junk.
+		 */
 		vcpu = container_of(ctxt, struct kvm_vcpu, arch.ctxt);
 
 		if (nested_virt_in_use(vcpu)) {
@@ -250,6 +255,11 @@ static void __hyp_text __sysreg_restore_vel1_state(struct kvm_cpu_context *ctxt)
 			 * view on put.
 			 */
 			write_sysreg(ctxt->sys_regs[VPIDR_EL2],	vpidr_el2);
+
+			/*
+			 * As we're restoring a nested guest, set the value
+			 * provided by the guest hypervisor.
+			 */
 			mpidr = ctxt->sys_regs[VMPIDR_EL2];
 		} else {
 			mpidr = ctxt->sys_regs[MPIDR_EL1];
