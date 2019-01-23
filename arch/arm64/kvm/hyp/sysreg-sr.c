@@ -41,7 +41,7 @@ static void __hyp_text __sysreg_save_common_state(struct kvm_cpu_context *ctxt)
 	 * The host arm64 Linux uses sp_el0 to point to 'current' and it must
 	 * therefore be saved/restored on every entry/exit to/from the guest.
 	 */
-	ctxt->gp_regs.regs.sp		= read_sysreg(sp_el0);
+	ctxt->regs.sp		= read_sysreg(sp_el0);
 }
 
 static void __hyp_text __sysreg_save_user_state(struct kvm_cpu_context *ctxt)
@@ -67,9 +67,9 @@ static void __hyp_text __sysreg_save_vel1_state(struct kvm_cpu_context *ctxt)
 	__ctx_sys_reg(ctxt, AMAIR_EL1)		= read_sysreg_el1(amair);
 	__ctx_sys_reg(ctxt, CNTKCTL_EL1)	= read_sysreg_el1(cntkctl);
 
-	__ctx_sys_reg[SPSR_EL1]		= read_sysreg_el1(spsr);
-	ctxt->gp_regs.sp_el1		= read_sysreg(sp_el1);
-	ctxt->gp_regs.elr_el1		= read_sysreg_el1(elr);
+	__ctx_sys_reg(ctxt, SPSR_EL1)		= read_sysreg_el1(spsr);
+	__ctx_sys_reg(ctxt, SP_EL1)		= read_sysreg(sp_el1);
+	__ctx_sys_reg(ctxt, ELR_EL1)		= read_sysreg_el1(elr);
 }
 
 static void __sysreg_save_vel2_state(struct kvm_cpu_context *ctxt)
@@ -142,8 +142,8 @@ static u64 __hyp_text from_hw_pstate(const struct kvm_cpu_context *ctxt)
 
 static void __hyp_text __sysreg_save_el2_return_state(struct kvm_cpu_context *ctxt)
 {
-	ctxt->gp_regs.regs.pc		= read_sysreg_el2(elr);
-	ctxt->gp_regs.regs.pstate	= from_hw_pstate(ctxt);
+	ctxt->regs.pc		= read_sysreg_el2(elr);
+	ctxt->regs.pstate	= from_hw_pstate(ctxt);
 
 	if (cpus_have_const_cap(ARM64_HAS_RAS_EXTN))
 		__ctx_sys_reg(ctxt, DISR_EL1) = read_sysreg_s(SYS_VDISR_EL2);
@@ -176,7 +176,7 @@ static void __hyp_text __sysreg_restore_common_state(struct kvm_cpu_context *ctx
 	 * The host arm64 Linux uses sp_el0 to point to 'current' and it must
 	 * therefore be saved/restored on every entry/exit to/from the guest.
 	 */
-	write_sysreg(ctxt->gp_regs.regs.sp,	  sp_el0);
+	write_sysreg(ctxt->regs.sp,	  sp_el0);
 }
 
 static void __hyp_text __sysreg_restore_user_state(struct kvm_cpu_context *ctxt)
@@ -285,10 +285,9 @@ static void __hyp_text __sysreg_restore_vel1_state(struct kvm_cpu_context *ctxt)
 	write_sysreg_el1(__ctx_sys_reg(ctxt, CONTEXTIDR_EL1),	contextidr);
 	write_sysreg_el1(__ctx_sys_reg(ctxt, AMAIR_EL1),	amair);
 	write_sysreg_el1(__ctx_sys_reg(ctxt, CNTKCTL_EL1), 	cntkctl);
-
-	write_sysreg(ctxt->gp_regs.sp_el1,		sp_el1);
-	write_sysreg_el1(ctxt->gp_regs.elr_el1,		elr);
-	write_sysreg_el1(__ctx_sys_reg(ctxt, SPSR_EL1),	spsr);
+	write_sysreg(__ctx_sys_reg(ctxt, SP_EL1),		sp_el1);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, ELR_EL1),		elr);
+	write_sysreg_el1(__ctx_sys_reg(ctxt, SPSR_EL1),		spsr);
 }
 
 static void __hyp_text __sysreg_restore_el1_state(struct kvm_cpu_context *ctxt)
@@ -307,7 +306,7 @@ static void __hyp_text __sysreg_restore_el1_state(struct kvm_cpu_context *ctxt)
 /* Read the VCPU state's PSTATE, but translate (v)EL2 to EL1. */
 static u64 __hyp_text to_hw_pstate(const struct kvm_cpu_context *ctxt)
 {
-	u64 mode = ctxt->gp_regs.regs.pstate & PSR_MODE_MASK;
+	u64 mode = ctxt->regs.pstate & PSR_MODE_MASK;
 
 	switch (mode) {
 	case PSR_MODE_EL2t:
@@ -316,7 +315,7 @@ static u64 __hyp_text to_hw_pstate(const struct kvm_cpu_context *ctxt)
 		mode = PSR_MODE_EL1h;
 	}
 
-	return (ctxt->gp_regs.regs.pstate & ~PSR_MODE_MASK) | mode;
+	return (ctxt->regs.pstate & ~PSR_MODE_MASK) | mode;
 }
 
 static void __hyp_text
@@ -339,7 +338,7 @@ __sysreg_restore_el2_return_state(struct kvm_cpu_context *ctxt)
 	if (!(mode & PSR_MODE32_BIT) && mode >= PSR_MODE_EL2t)
 		pstate = PSR_MODE_EL2h | PSR_IL_BIT;
 
-	write_sysreg_el2(ctxt->gp_regs.regs.pc,		elr);
+	write_sysreg_el2(ctxt->regs.pc,		elr);
 	write_sysreg_el2(pstate,			spsr);
 
 	if (cpus_have_const_cap(ARM64_HAS_RAS_EXTN))
@@ -392,8 +391,8 @@ void __hyp_text __sysreg32_restore_state(struct kvm_vcpu *vcpu)
 	write_sysreg(__vcpu_sys_reg(vcpu, SPSR32_IRQ), spsr_irq);
 	write_sysreg(__vcpu_sys_reg(vcpu, SPSR32_FIQ), spsr_fiq);
 
-	write_sysreg(__vcpu_sys_reg(DACR32_EL2), dacr32_el2);
-	write_sysreg(__vcpu_sys_reg(IFSR32_EL2), ifsr32_el2);
+	write_sysreg(__vcpu_sys_reg(vcpu, DACR32_EL2), dacr32_el2);
+	write_sysreg(__vcpu_sys_reg(vcpu, IFSR32_EL2), ifsr32_el2);
 
 	if (has_vhe() || vcpu->arch.flags & KVM_ARM64_DEBUG_DIRTY)
 		write_sysreg(__vcpu_sys_reg(vcpu, DBGVCR32_EL2), dbgvcr32_el2);

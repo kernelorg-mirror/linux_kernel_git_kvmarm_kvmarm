@@ -40,19 +40,19 @@ static u32 kvm_ipa_limit;
 /*
  * ARMv8 Reset Values
  */
-static const struct kvm_regs default_regs_reset = {
-	.regs.pstate = (PSR_MODE_EL1h | PSR_A_BIT | PSR_I_BIT |
-			PSR_F_BIT | PSR_D_BIT),
+static const struct user_pt_regs default_regs_reset = {
+	.pstate = (PSR_MODE_EL1h | PSR_A_BIT | PSR_I_BIT |
+		   PSR_F_BIT | PSR_D_BIT),
 };
 
-static const struct kvm_regs default_regs_reset_el2 = {
-	.regs.pstate = (PSR_MODE_EL2h | PSR_A_BIT | PSR_I_BIT |
-			PSR_F_BIT | PSR_D_BIT),
+static const struct user_pt_regs default_regs_reset_el2 = {
+	.pstate = (PSR_MODE_EL2h | PSR_A_BIT | PSR_I_BIT |
+		   PSR_F_BIT | PSR_D_BIT),
 };
 
-static const struct kvm_regs default_regs_reset32 = {
-	.regs.pstate = (PSR_AA32_MODE_SVC | PSR_AA32_A_BIT |
-			PSR_AA32_I_BIT | PSR_AA32_F_BIT),
+static const struct user_pt_regs default_regs_reset32 = {
+	.pstate = (PSR_AA32_MODE_SVC | PSR_AA32_A_BIT |
+		   PSR_AA32_I_BIT | PSR_AA32_F_BIT),
 };
 
 static bool cpu_has_32bit_el1(void)
@@ -113,7 +113,7 @@ int kvm_arch_vm_ioctl_check_extension(struct kvm *kvm, long ext)
  */
 int kvm_reset_vcpu(struct kvm_vcpu *vcpu)
 {
-	const struct kvm_regs *cpu_reset;
+	const struct user_pt_regs *cpu_reset;
 
 	switch (vcpu->arch.target) {
 	default:
@@ -131,7 +131,7 @@ int kvm_reset_vcpu(struct kvm_vcpu *vcpu)
 	}
 
 	/* Reset core registers */
-	memcpy(vcpu_gp_regs(vcpu), cpu_reset, sizeof(*cpu_reset));
+	vcpu->arch.ctxt.regs = *cpu_reset;
 
 	/* Reset system registers */
 	kvm_reset_sys_regs(vcpu);

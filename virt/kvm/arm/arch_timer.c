@@ -82,7 +82,7 @@ u64 kvm_phys_timer_read(void)
 static void get_timer_map(struct kvm_vcpu *vcpu, struct timer_map *map)
 {
 	if (nested_virt_in_use(vcpu)) {
-		if (is_hyp_ctxt(vcpu) && vcpu_has_e2h_set(vcpu)) {
+		if (is_hyp_ctxt(vcpu) && vcpu_el2_e2h_is_set(vcpu)) {
 			map->direct_vtimer = vcpu_hvtimer(vcpu);
 			map->direct_ptimer = vcpu_hptimer(vcpu);
 			map->emul_vtimer = vcpu_vtimer(vcpu);

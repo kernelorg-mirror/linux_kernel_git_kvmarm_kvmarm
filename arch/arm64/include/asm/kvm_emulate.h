@@ -135,33 +135,12 @@ static inline void vcpu_set_vsesr(struct kvm_vcpu *vcpu, u64 vsesr)
 
 static inline unsigned long *vcpu_pc(const struct kvm_vcpu *vcpu)
 {
-	return (unsigned long *)&vcpu_gp_regs(vcpu)->regs.pc;
-}
-
-static inline unsigned long *__vcpu_elr_el1(const struct kvm_vcpu *vcpu)
-{
-	return (unsigned long *)&vcpu_gp_regs(vcpu)->elr_el1;
-}
-
-static inline unsigned long vcpu_read_elr_el1(const struct kvm_vcpu *vcpu)
-{
-	if (vcpu->arch.sysregs_loaded_on_cpu)
-		return read_sysreg_el1(elr);
-	else
-		return *__vcpu_elr_el1(vcpu);
-}
-
-static inline void vcpu_write_elr_el1(const struct kvm_vcpu *vcpu, unsigned long v)
-{
-	if (vcpu->arch.sysregs_loaded_on_cpu)
-		write_sysreg_el1(v, elr);
-	else
-		*__vcpu_elr_el1(vcpu) = v;
+	return (unsigned long *)&vcpu_gp_regs(vcpu)->pc;
 }
 
 static inline unsigned long *vcpu_cpsr(const struct kvm_vcpu *vcpu)
 {
-	return (unsigned long *)&vcpu_gp_regs(vcpu)->regs.pstate;
+	return (unsigned long *)&vcpu_gp_regs(vcpu)->pstate;
 }
 
 static inline bool vcpu_mode_is_32bit(const struct kvm_vcpu *vcpu)
@@ -190,19 +169,19 @@ static inline void vcpu_set_thumb(struct kvm_vcpu *vcpu)
 static inline unsigned long vcpu_get_reg(const struct kvm_vcpu *vcpu,
 					 u8 reg_num)
 {
-	return (reg_num == 31) ? 0 : vcpu_gp_regs(vcpu)->regs.regs[reg_num];
+	return (reg_num == 31) ? 0 : vcpu_gp_regs(vcpu)->regs[reg_num];
 }
 
 static inline void vcpu_set_reg(struct kvm_vcpu *vcpu, u8 reg_num,
 				unsigned long val)
 {
 	if (reg_num != 31)
-		vcpu_gp_regs(vcpu)->regs.regs[reg_num] = val;
+		vcpu_gp_regs(vcpu)->regs[reg_num] = val;
 }
 
 static inline bool vcpu_mode_el2_ctxt(const struct kvm_cpu_context *ctxt)
 {
-	unsigned long cpsr = ctxt->gp_regs.regs.pstate;
+	unsigned long cpsr = ctxt->regs.pstate;
 	u32 mode;
 
 	if (cpsr & PSR_MODE32_BIT)
@@ -220,7 +199,7 @@ static inline bool vcpu_mode_el2(const struct kvm_vcpu *vcpu)
 
 static inline bool __vcpu_el2_e2h_is_set(const struct kvm_cpu_context *ctxt)
 {
-	return __ctxt_sys_reg(ctxt, HCR_EL2) & HCR_E2H;
+	return __ctx_sys_reg(ctxt, HCR_EL2) & HCR_E2H;
 }
 
 static inline bool vcpu_el2_e2h_is_set(const struct kvm_vcpu *vcpu)
@@ -230,7 +209,7 @@ static inline bool vcpu_el2_e2h_is_set(const struct kvm_vcpu *vcpu)
 
 static inline bool __vcpu_el2_tge_is_set(const struct kvm_cpu_context *ctxt)
 {
-	return __ctxt_sys_reg(ctxt, HCR_EL2) & HCR_TGE;
+	return __ctx_sys_reg(ctxt, HCR_EL2) & HCR_TGE;
 }
 
 static inline bool vcpu_el2_tge_is_set(const struct kvm_vcpu *vcpu)
@@ -279,7 +258,7 @@ static inline u64 __fixup_spsr_el2_read(const struct kvm_cpu_context *ctxt, u64 
 	 * register has still the value we saved on the last write.
 	 */
 	if ((val & 0xc) == 0)
-		return __ctxt_sys_reg(ctxt, SPSR_EL2);
+		return __ctx_sys_reg(ctxt, SPSR_EL2);
 
 	/*
 	 * Otherwise there was a "local" exception on the CPU,
@@ -572,11 +551,11 @@ static inline void kvm_skip_instr(struct kvm_vcpu *vcpu, bool is_wide_instr)
 static inline void __hyp_text __kvm_skip_instr(struct kvm_vcpu *vcpu)
 {
 	*vcpu_pc(vcpu) = read_sysreg_el2(elr);
-	vcpu->arch.ctxt.gp_regs.regs.pstate = read_sysreg_el2(spsr);
+	vcpu->arch.ctxt.regs.pstate = read_sysreg_el2(spsr);
 
 	kvm_skip_instr(vcpu, kvm_vcpu_trap_il_is32bit(vcpu));
 
-	write_sysreg_el2(vcpu->arch.ctxt.gp_regs.regs.pstate, spsr);
+	write_sysreg_el2(vcpu->arch.ctxt.regs.pstate, spsr);
 	write_sysreg_el2(*vcpu_pc(vcpu), elr);
 }
 

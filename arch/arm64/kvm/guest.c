@@ -97,6 +97,40 @@ static int validate_core_offset(const struct kvm_one_reg *reg)
 	return -EINVAL;
 }
 
+static void *get_core_reg_ptr(struct kvm_vcpu *vcpu,
+			      const struct kvm_one_reg *reg)
+{
+	u64 off = core_reg_offset_from_id(reg->id);
+
+	switch (off) {
+	case KVM_REG_ARM_CORE_REG(regs.regs[0]) ...
+	     KVM_REG_ARM_CORE_REG(regs.regs[30]):
+		return &vcpu_gp_regs(vcpu)->regs[off / 2];
+	case KVM_REG_ARM_CORE_REG(regs.sp):
+		return &vcpu_gp_regs(vcpu)->sp;
+	case KVM_REG_ARM_CORE_REG(regs.pc):
+		return vcpu_pc(vcpu);
+	case KVM_REG_ARM_CORE_REG(regs.pstate):
+		return vcpu_cpsr(vcpu);
+	case KVM_REG_ARM_CORE_REG(sp_el1):
+		return __ctx_sys_reg_ptr(&vcpu->arch.ctxt, SP_EL1);
+	case KVM_REG_ARM_CORE_REG(elr_el1):
+		return __ctx_sys_reg_ptr(&vcpu->arch.ctxt, ELR_EL1);
+	case KVM_REG_ARM_CORE_REG(spsr[KVM_SPSR_EL1]):
+		return __ctx_sys_reg_ptr(&vcpu->arch.ctxt, SPSR_EL1);
+	case KVM_REG_ARM_CORE_REG(spsr[KVM_SPSR_ABT]):
+		return __ctx_sys_reg_ptr(&vcpu->arch.ctxt, SPSR32_ABT);
+	case KVM_REG_ARM_CORE_REG(spsr[KVM_SPSR_UND]):
+		return __ctx_sys_reg_ptr(&vcpu->arch.ctxt, SPSR32_UND);
+	case KVM_REG_ARM_CORE_REG(spsr[KVM_SPSR_IRQ]):
+		return __ctx_sys_reg_ptr(&vcpu->arch.ctxt, SPSR32_IRQ);
+	case KVM_REG_ARM_CORE_REG(spsr[KVM_SPSR_FIQ]):
+		return __ctx_sys_reg_ptr(&vcpu->arch.ctxt, SPSR32_FIQ);
+	}
+
+	return NULL;
+}
+
 static int get_core_reg(struct kvm_vcpu *vcpu, const struct kvm_one_reg *reg)
 {
 	/*
@@ -106,8 +140,8 @@ static int get_core_reg(struct kvm_vcpu *vcpu, const struct kvm_one_reg *reg)
 	 * off the index in the "array".
 	 */
 	__u32 __user *uaddr = (__u32 __user *)(unsigned long)reg->addr;
-	struct kvm_regs *regs = vcpu_gp_regs(vcpu);
-	int nr_regs = sizeof(*regs) / sizeof(__u32);
+	int nr_regs = sizeof(struct kvm_regs) / sizeof(__u32);
+	void *addr;
 	u32 off;
 
 	/* Our ID is an index into the kvm_regs struct. */
@@ -119,7 +153,11 @@ static int get_core_reg(struct kvm_vcpu *vcpu, const struct kvm_one_reg *reg)
 	if (validate_core_offset(reg))
 		return -EINVAL;
 
-	if (copy_to_user(uaddr, ((u32 *)regs) + off, KVM_REG_SIZE(reg->id)))
+	addr = get_core_reg_ptr(vcpu, reg);
+	if (!addr)
+		return -EINVAL;
+
+	if (copy_to_user(uaddr, addr, KVM_REG_SIZE(reg->id)))
 		return -EFAULT;
 
 	return 0;
@@ -128,10 +166,9 @@ static int get_core_reg(struct kvm_vcpu *vcpu, const struct kvm_one_reg *reg)
 static int set_core_reg(struct kvm_vcpu *vcpu, const struct kvm_one_reg *reg)
 {
 	__u32 __user *uaddr = (__u32 __user *)(unsigned long)reg->addr;
-	struct kvm_regs *regs = vcpu_gp_regs(vcpu);
-	int nr_regs = sizeof(*regs) / sizeof(__u32);
+	int nr_regs = sizeof(struct kvm_regs) / sizeof(__u32);
 	__uint128_t tmp;
-	void *valp = &tmp;
+	void *valp = &tmp, *addr;
 	u64 off;
 	int err = 0;
 
@@ -142,6 +179,10 @@ static int set_core_reg(struct kvm_vcpu *vcpu, const struct kvm_one_reg *reg)
 		return -ENOENT;
 
 	if (validate_core_offset(reg))
+		return -EINVAL;
+
+	addr = get_core_reg_ptr(vcpu, reg);
+	if (!addr)
 		return -EINVAL;
 
 	if (KVM_REG_SIZE(reg->id) > sizeof(tmp))
@@ -184,7 +225,7 @@ static int set_core_reg(struct kvm_vcpu *vcpu, const struct kvm_one_reg *reg)
 		}
 	}
 
-	memcpy((u32 *)regs + off, valp, KVM_REG_SIZE(reg->id));
+	memcpy(addr, valp, KVM_REG_SIZE(reg->id));
 out:
 	return err;
 }

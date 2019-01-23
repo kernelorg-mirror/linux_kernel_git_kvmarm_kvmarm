@@ -1577,19 +1577,6 @@ static int set_raz_id_reg(struct kvm_vcpu *vcpu, const struct sys_reg_desc *rd,
 	.set_user = set_raz_id_reg,		\
 }
 
-static bool access_sp_el1(struct kvm_vcpu *vcpu,
-			  struct sys_reg_params *p,
-			  const struct sys_reg_desc *r)
-{
-	/* SP_EL1 is NOT maintained in sys_regs array */
-	if (p->is_write)
-		vcpu->arch.ctxt.gp_regs.sp_el1 = p->regval;
-	else
-		p->regval = vcpu->arch.ctxt.gp_regs.sp_el1;
-
-	return true;
-}
-
 static bool forward_at_traps(struct kvm_vcpu *vcpu)
 {
 	return forward_traps(vcpu, HCR_AT);
@@ -1617,9 +1604,9 @@ static bool access_elr(struct kvm_vcpu *vcpu,
 		return false;
 
 	if (p->is_write)
-		vcpu->arch.ctxt.gp_regs.elr_el1 = p->regval;
+		vcpu_write_sys_reg(vcpu, p->regval, ELR_EL1);
 	else
-		p->regval = vcpu->arch.ctxt.gp_regs.elr_el1;
+		p->regval = vcpu_read_sys_reg(vcpu, ELR_EL1);
 
 	return true;
 }
@@ -1635,7 +1622,7 @@ static bool access_spsr(struct kvm_vcpu *vcpu,
 		return false;
 
 	if (p->is_write)
-		vcpu_write_sysreg(vcpu, p->regval, SPSR_EL1);
+		vcpu_write_sys_reg(vcpu, p->regval, SPSR_EL1);
 	else
 		p->regval = vcpu_read_sys_reg(vcpu, SPSR_EL1);
 
@@ -1966,8 +1953,8 @@ static const struct sys_reg_desc sys_reg_descs[] = {
 	{ SYS_DESC(SYS_TTBR1_EL1), access_vm_reg, reset_unknown, TTBR1_EL1 },
 	{ SYS_DESC(SYS_TCR_EL1), access_vm_reg, reset_val, TCR_EL1, 0 },
 
-	{ SYS_DESC(SYS_SPSR_EL1), access_spsr},
-	{ SYS_DESC(SYS_ELR_EL1), access_elr},
+	{ SYS_DESC(SYS_SPSR_EL1), access_spsr, reset_unknown, SPSR_EL1},
+	{ SYS_DESC(SYS_ELR_EL1), access_elr, reset_unknown, ELR_EL1},
 
 	{ SYS_DESC(SYS_AFSR0_EL1), access_vm_reg, reset_unknown, AFSR0_EL1 },
 	{ SYS_DESC(SYS_AFSR1_EL1), access_vm_reg, reset_unknown, AFSR1_EL1 },
@@ -2135,7 +2122,7 @@ static const struct sys_reg_desc sys_reg_descs[] = {
 	{ SYS_DESC(SYS_DACR32_EL2), NULL, reset_unknown, DACR32_EL2 },
 	{ SYS_DESC(SYS_SPSR_EL2), access_spsr_el2, reset_val, SPSR_EL2, 0 },
 	{ SYS_DESC(SYS_ELR_EL2), access_rw, reset_val, ELR_EL2, 0 },
-	{ SYS_DESC(SYS_SP_EL1), access_sp_el1},
+	{ SYS_DESC(SYS_SP_EL1), access_rw, reset_unknown, SP_EL1},
 
 	{ SYS_DESC(SYS_IFSR32_EL2), NULL, reset_unknown, IFSR32_EL2 },
 	{ SYS_DESC(SYS_AFSR0_EL2), access_rw, reset_val, AFSR0_EL2, 0 },

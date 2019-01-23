@@ -289,6 +289,8 @@ static inline bool sysreg_is_el2(int reg)
 
 #define NR_COPRO_REGS	(NR_SYS_REGS * 2)
 
+#define NR_8_4	0		/* Ah! */
+
 struct kvm_cpu_context {
 	struct user_pt_regs regs;	/* sp = sp_el0 */
 
@@ -302,7 +304,7 @@ struct kvm_cpu_context {
 	};
 
 	struct kvm_vcpu *__hyp_running_vcpu;
-} __aligned(4k);
+};
 
 typedef struct kvm_cpu_context kvm_cpu_context_t;
 
@@ -410,7 +412,7 @@ struct kvm_vcpu_arch {
 #define KVM_ARM64_HOST_SVE_IN_USE	(1 << 3) /* backup for host TIF_SVE */
 #define KVM_ARM64_HOST_SVE_ENABLED	(1 << 4) /* SVE enabled for EL0 */
 
-#define vcpu_gp_regs(v)		(&(v)->arch.ctxt.gp_regs)
+#define vcpu_gp_regs(v)		(&(v)->arch.ctxt.regs)
 
 /*
  * Only use __vcpu_sys_reg and __ctx_sys_reg if you know you want the memory
@@ -418,13 +420,17 @@ struct kvm_vcpu_arch {
  * running VCPU.  For example, for userspace access or for system registers
  * that are never context switched, but only emulated.
  */
-#define __ctx_sys_reg(c,r)			\
-	(((r) < NR_8_4) ?			\
-	((c)->sys_regs_8_4[(r)] :		\
-	((c)->sys_regs[(r)])))
+#define __ctx_sys_reg_ptr(c, r)					\
+	({							\
+		u64 *__ptr;					\
+		__ptr = (r) + (u64 *)(((r) < NR_8_4) ?		\
+				      (c)->sys_regs_page :	\
+				      (c)->sys_regs);		\
+		__ptr;						\
+	})
 
-#define __vcpu_sys_reg(v,r)			\
-	 __ctx_sys_reg(&(v)->arch.ctxt, r)
+#define __ctx_sys_reg(c,r)	*__ctx_sys_reg_ptr((c), r)
+#define __vcpu_sys_reg(v,r)	*__ctx_sys_reg_ptr(&(v)->arch.ctxt, r)
 
 u64 vcpu_read_sys_reg(const struct kvm_vcpu *vcpu, int reg);
 void vcpu_write_sys_reg(struct kvm_vcpu *vcpu, u64 val, int reg);

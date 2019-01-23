@@ -25,8 +25,7 @@
 #include <asm/kvm_asm.h>
 #include <asm/kvm_mmu.h>
 
-#define CPU_GP_REG_OFFSET(x)	(CPU_GP_REGS + x)
-#define CPU_XREG_OFFSET(x)	CPU_GP_REG_OFFSET(CPU_USER_PT_REGS + 8*x)
+#define CPU_XREG_OFFSET(x)	(CPU_USER_PT_REGS + 8*x)
 
 	.text
 	.pushsection	.hyp.text, "ax"
