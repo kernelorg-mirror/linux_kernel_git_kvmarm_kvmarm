@@ -413,15 +413,18 @@ struct kvm_vcpu_arch {
 #define vcpu_gp_regs(v)		(&(v)->arch.ctxt.gp_regs)
 
 /*
- * Only use __vcpu_sys_reg if you know you want the memory backed version of a
- * register, and not the one most recently accessed by a running VCPU.  For
- * example, for userspace access or for system registers that are never context
- * switched, but only emulated.
+ * Only use __vcpu_sys_reg and __ctx_sys_reg if you know you want the memory
+ * backed version of a register, and not the one most recently accessed by a
+ * running VCPU.  For example, for userspace access or for system registers
+ * that are never context switched, but only emulated.
  */
+#define __ctx_sys_reg(c,r)			\
+	(((r) < NR_8_4) ?			\
+	((c)->sys_regs_8_4[(r)] :		\
+	((c)->sys_regs[(r)])))
+
 #define __vcpu_sys_reg(v,r)			\
-	((r) < NR_8_4) ?			\
-	((v)->arch.ctxt.sys_regs_8_4[(r)] :	\
-	((v)->arch.ctxt.sys_regs[(r)])
+	 __ctx_sys_reg(&(v)->arch.ctxt, r)
 
 u64 vcpu_read_sys_reg(const struct kvm_vcpu *vcpu, int reg);
 void vcpu_write_sys_reg(struct kvm_vcpu *vcpu, u64 val, int reg);
@@ -526,7 +529,7 @@ static inline void kvm_init_host_cpu_context(kvm_cpu_context_t *cpu_ctxt,
 					     int cpu)
 {
 	/* The host's MPIDR is immutable, so let's set it up at boot time */
-	cpu_ctxt->sys_regs[MPIDR_EL1] = cpu_logical_map(cpu);
+	__ctx_sys_reg(cpu_ctxt, MPIDR_EL1) = cpu_logical_map(cpu);
 }
 
 void __kvm_enable_ssbs(void);
