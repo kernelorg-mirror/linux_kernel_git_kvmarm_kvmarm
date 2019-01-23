@@ -49,7 +49,7 @@ struct arch_timer_context {
 	struct kvm_irq_level		irq;
 
 	/* Virtual offset */
-	u64				cntvoff;
+	u64				cntvoff; /* ARMv8.4-NV=0x60 */
 
 	/* Emulated Timer (may be unused) */
 	struct hrtimer			hrtimer;

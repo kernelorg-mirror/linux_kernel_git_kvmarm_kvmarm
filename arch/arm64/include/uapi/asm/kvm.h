@@ -49,10 +49,10 @@
 struct kvm_regs {
 	struct user_pt_regs regs;	/* sp = sp_el0 */
 
-	__u64	sp_el1;
-	__u64	elr_el1;
+	__u64	sp_el1;		/* ARMv8.4-NV=0x240 */
+	__u64	elr_el1;	/* ARMv8.4-NV=0x230 */
 
-	__u64	spsr[KVM_NR_SPSR];
+	__u64	spsr[KVM_NR_SPSR]; /* ARMv8.4-NV=0x160 */
 
 	struct user_fpsimd_state fp_regs;
 };

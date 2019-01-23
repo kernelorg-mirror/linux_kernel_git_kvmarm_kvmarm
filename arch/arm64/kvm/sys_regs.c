@@ -220,6 +220,11 @@ static bool __vcpu_read_sys_reg_from_cpu(int reg, u64 *val)
 	case DACR32_EL2:	*val = read_sysreg_s(SYS_DACR32_EL2);	break;
 	case IFSR32_EL2:	*val = read_sysreg_s(SYS_IFSR32_EL2);	break;
 	case DBGVCR32_EL2:	*val = read_sysreg_s(SYS_DBGVCR32_EL2);	break;
+	case SPSR_EL1:		*val = read_sysreg_el1(spsr);		break;
+	case SPSR32_ABT:	*val = read_sysreg(spsr_abt);		break;
+	case SPSR32_UND:	*val = read_sysreg(spsr_und);		break;
+	case SPSR32_IRQ:	*val = read_sysreg(spsr_irq);		break;
+	case SPSR32_FIQ:	*val = read_sysreg(spsr_fiq);		break;
 	default:		return false;
 	}
 
@@ -312,6 +317,11 @@ static bool __vcpu_write_sys_reg_to_cpu(u64 val, int reg)
 	case DACR32_EL2:	write_sysreg_s(val, SYS_DACR32_EL2);	break;
 	case IFSR32_EL2:	write_sysreg_s(val, SYS_IFSR32_EL2);	break;
 	case DBGVCR32_EL2:	write_sysreg_s(val, SYS_DBGVCR32_EL2);	break;
+	case SPSR_EL1:		write_sysreg_el1(val, spsr);		break;
+	case SPSR32_ABT:	write_sysreg(val, spsr_abt);		break;
+	case SPSR32_UND:	write_sysreg(val, spsr_und);		break;
+	case SPSR32_IRQ:	write_sysreg(val, spsr_irq);		break;
+	case SPSR32_FIQ:	write_sysreg(val, spsr_fiq);		break;
 	default:		return false;
 	}
 
@@ -1625,9 +1635,9 @@ static bool access_spsr(struct kvm_vcpu *vcpu,
 		return false;
 
 	if (p->is_write)
-		vcpu->arch.ctxt.gp_regs.spsr[KVM_SPSR_EL1] = p->regval;
+		vcpu_write_sysreg(vcpu, p->regval, SPSR_EL1);
 	else
-		p->regval = vcpu->arch.ctxt.gp_regs.spsr[KVM_SPSR_EL1];
+		p->regval = vcpu_read_sys_reg(vcpu, SPSR_EL1);
 
 	return true;
 }

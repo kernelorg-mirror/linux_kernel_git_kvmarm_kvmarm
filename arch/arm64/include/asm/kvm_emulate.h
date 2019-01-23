@@ -300,10 +300,7 @@ static inline unsigned long vcpu_read_spsr(const struct kvm_vcpu *vcpu)
 	if (unlikely(vcpu_mode_el2(vcpu)))
 		return vcpu_read_sys_reg(vcpu, SPSR_EL2);
 
-	if (vcpu->arch.sysregs_loaded_on_cpu)
-		return read_sysreg_el1(spsr);
-	else
-		return vcpu_gp_regs(vcpu)->spsr[KVM_SPSR_EL1];
+	return vcpu_read_sys_reg(vcpu, SPSR_EL1);
 }
 
 static inline void vcpu_write_spsr(struct kvm_vcpu *vcpu, unsigned long v)
@@ -318,10 +315,7 @@ static inline void vcpu_write_spsr(struct kvm_vcpu *vcpu, unsigned long v)
 		return;
 	}
 
-	if (vcpu->arch.sysregs_loaded_on_cpu)
-		write_sysreg_el1(v, spsr);
-	else
-		vcpu_gp_regs(vcpu)->spsr[KVM_SPSR_EL1] = v;
+	vcpu_write_sys_reg(vcpu, v, SPSR_EL1);
 }
 
 static inline bool vcpu_mode_priv(const struct kvm_vcpu *vcpu)
