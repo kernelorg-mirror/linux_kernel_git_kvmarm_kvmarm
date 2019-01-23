@@ -240,6 +240,18 @@ enum vcpu_sysreg {
 	SP_EL2,		/* EL2 Stack Pointer */
 	VNCR_EL2,	/* ARMv8.4-NV=0xb0 */
 
+	/* Timer Registers */
+	CNTV_CTL_EL0,	/* ARMv8.4-NV=0x170 */
+	CNTV_CVAL_EL0,	/* ARMv8.4-NV=0x168 */
+	CNTP_CTL_EL0,	/* ARMv8.4-NV=0x180 */
+	CNTP_CVAL_EL0,	/* ARMv8.4-NV=0x178 */
+	CNTHV_CTL_EL2,
+	CNTHV_CVAL_EL2,
+	CNTHP_CTL_EL2,
+	CNTHP_CVAL_EL2,
+	CNTVOFF_EL2,	/* ARMv8.4-NV=0x60 */
+
+
 	NR_SYS_REGS	/* Nothing after this line! */
 };
 

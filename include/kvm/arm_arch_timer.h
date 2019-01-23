@@ -41,15 +41,12 @@ enum kvm_arch_timer_regs {
 struct arch_timer_context {
 	struct kvm_vcpu			*vcpu;
 
-	/* Registers: control register, timer value */
-	u32				cnt_ctl;
-	u64				cnt_cval;
+	/* Registers: enum vcpu_sysreg values */
+	unsigned int			cnt_ctl_idx;
+	unsigned int			cnt_cval_idx;
 
 	/* Timer IRQ */
 	struct kvm_irq_level		irq;
-
-	/* Virtual offset */
-	u64				cntvoff; /* ARMv8.4-NV=0x60 */
 
 	/* Emulated Timer (may be unused) */
 	struct hrtimer			hrtimer;
@@ -116,6 +113,9 @@ bool kvm_arch_timer_get_input_level(int vintid);
 #define vcpu_ptimer(v)	(&(v)->arch.timer_cpu.timers[TIMER_PTIMER])
 #define vcpu_hvtimer(v)	(&(v)->arch.timer_cpu.timers[TIMER_HVTIMER])
 #define vcpu_hptimer(v)	(&(v)->arch.timer_cpu.timers[TIMER_HPTIMER])
+
+#define timer_cnt_ctl(ctx)	__vcpu_sys_reg((ctx)->vcpu, (ctx)->cnt_ctl_idx)
+#define timer_cnt_cval(ctx)	__vcpu_sys_reg((ctx)->vcpu, (ctx)->cnt_cval_idx)
 
 #define arch_timer_ctx_index(ctx)	((ctx) - vcpu_timer((ctx)->vcpu)->timers)
 

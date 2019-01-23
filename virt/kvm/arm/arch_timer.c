@@ -79,6 +79,14 @@ u64 kvm_phys_timer_read(void)
 	return timecounter->cc->read(timecounter->cc);
 }
 
+static u64 timer_cntvoff(struct kvm_vcpu *vcpu, struct arch_timer_context *ctxt)
+{
+	if (ctxt == vcpu_vtimer(vcpu))
+		return __vcpu_sys_reg(vcpu, CNTVOFF_EL2);
+	else
+		return 0;
+}
+
 static void get_timer_map(struct kvm_vcpu *vcpu, struct timer_map *map)
 {
 	if (nested_virt_in_use(vcpu)) {
@@ -161,8 +169,8 @@ static u64 kvm_timer_compute_delta(struct arch_timer_context *timer_ctx)
 {
 	u64 cval, now;
 
-	cval = timer_ctx->cnt_cval;
-	now = kvm_phys_timer_read() - timer_ctx->cntvoff;
+	cval = timer_cnt_cval(timer_ctx);
+	now = kvm_phys_timer_read() - timer_cntvoff(vcpu, timer_ctx);
 
 	if (now < cval) {
 		u64 ns;
@@ -181,8 +189,8 @@ static bool kvm_timer_irq_can_fire(struct arch_timer_context *timer_ctx)
 {
 	WARN_ON(timer_ctx && timer_ctx->loaded);
 	return timer_ctx &&
-	       !(timer_ctx->cnt_ctl & ARCH_TIMER_CTRL_IT_MASK) &&
-		(timer_ctx->cnt_ctl & ARCH_TIMER_CTRL_ENABLE);
+	       !(timer_cnt_ctl(timer_ctx) & ARCH_TIMER_CTRL_IT_MASK) &&
+		(timer_cnt_ctl(timer_ctx) & ARCH_TIMER_CTRL_ENABLE);
 }
 
 /*
@@ -297,8 +305,8 @@ static bool kvm_timer_should_fire(struct arch_timer_context *timer_ctx)
 	if (!kvm_timer_irq_can_fire(timer_ctx))
 		return false;
 
-	cval = timer_ctx->cnt_cval;
-	now = kvm_phys_timer_read() - timer_ctx->cntvoff;
+	cval = timer_cnt_cval(timer_ctx);
+	now = kvm_phys_timer_read() - timer_cntvoff(vcpu, timer_ctx);
 
 	return cval <= now;
 }
@@ -392,8 +400,8 @@ static void timer_save_state(struct arch_timer_context *ctx)
 	switch (index) {
 	case TIMER_VTIMER:
 	case TIMER_HVTIMER:
-		ctx->cnt_ctl = read_sysreg_el0(cntv_ctl);
-		ctx->cnt_cval = read_sysreg_el0(cntv_cval);
+		timer_cnt_ctl(ctx) = read_sysreg_el0(cntv_ctl);
+		timer_cnt_cval(ctx) = read_sysreg_el0(cntv_cval);
 
 		/* Disable the timer */
 		write_sysreg_el0(0, cntv_ctl);
@@ -402,8 +410,8 @@ static void timer_save_state(struct arch_timer_context *ctx)
 		break;
 	case TIMER_PTIMER:
 	case TIMER_HPTIMER:
-		ctx->cnt_ctl = read_sysreg_el0(cntp_ctl);
-		ctx->cnt_cval = read_sysreg_el0(cntp_cval);
+		timer_cnt_ctl(ctx) = read_sysreg_el0(cntp_ctl);
+		timer_cnt_cval(ctx) = read_sysreg_el0(cntp_cval);
 
 		/* Disable the timer */
 		write_sysreg_el0(0, cntp_ctl);
@@ -474,15 +482,15 @@ static void timer_restore_state(struct arch_timer_context *ctx)
 	switch (index) {
 	case TIMER_VTIMER:
 	case TIMER_HVTIMER:
-		write_sysreg_el0(ctx->cnt_cval, cntv_cval);
+		write_sysreg_el0(timer_cnt_cval(ctx), cntv_cval);
 		isb();
-		write_sysreg_el0(ctx->cnt_ctl, cntv_ctl);
+		write_sysreg_el0(timer_cnt_ctl(ctx), cntv_ctl);
 		break;
 	case TIMER_PTIMER:
 	case TIMER_HPTIMER:
-		write_sysreg_el0(ctx->cnt_cval, cntp_cval);
+		write_sysreg_el0(timer_cnt_cval(ctx), cntp_cval);
 		isb();
-		write_sysreg_el0(ctx->cnt_ctl, cntp_ctl);
+		write_sysreg_el0(timer_cnt_ctl(ctx), cntp_ctl);
 		break;
 	case NR_KVM_TIMERS:
 		BUG();
@@ -603,7 +611,7 @@ void kvm_timer_vcpu_load(struct kvm_vcpu *vcpu)
 		kvm_timer_vcpu_load_nogic(vcpu);
 	}
 
-	set_cntvoff(map.direct_vtimer->cntvoff);
+	set_cntvoff(timer_cntvoff(vcpu, map.direct_vtimer));
 
 	kvm_timer_unblocking(vcpu);
 
@@ -717,10 +725,11 @@ int kvm_timer_vcpu_reset(struct kvm_vcpu *vcpu)
 	 * resets the timer to be disabled and unmasked and is compliant with
 	 * the ARMv7 architecture.
 	 */
-	vcpu_vtimer(vcpu)->cnt_ctl = 0;
-	vcpu_ptimer(vcpu)->cnt_ctl = 0;
-	vcpu_hvtimer(vcpu)->cnt_ctl = 0;
-	vcpu_hptimer(vcpu)->cnt_ctl = 0;
+	timer_cnt_ctl(vcpu_vtimer(vcpu)) = 0;
+	timer_cnt_ctl(vcpu_ptimer(vcpu)) = 0;
+	timer_cnt_ctl(vcpu_hvtimer(vcpu)) = 0;
+	timer_cnt_ctl(vcpu_hptimer(vcpu)) = 0;
+
 
 	if (timer->enabled) {
 		kvm_timer_update_irq(vcpu, false, vcpu_vtimer(vcpu));
@@ -752,13 +761,13 @@ static void update_vtimer_cntvoff(struct kvm_vcpu *vcpu, u64 cntvoff)
 
 	mutex_lock(&kvm->lock);
 	kvm_for_each_vcpu(i, tmp, kvm)
-		vcpu_vtimer(tmp)->cntvoff = cntvoff;
+		__vcpu_sys_reg(tmp, CNTVOFF_EL2) = cntvoff;
 
 	/*
 	 * When called from the vcpu create path, the CPU being created is not
 	 * included in the loop above, so we just set it here as well.
 	 */
-	vcpu_vtimer(vcpu)->cntvoff = cntvoff;
+	__vcpu_sys_reg(vcpu, CNTVOFF_EL2) = cntvoff;
 	mutex_unlock(&kvm->lock);
 }
 
@@ -772,9 +781,6 @@ void kvm_timer_vcpu_init(struct kvm_vcpu *vcpu)
 
 	/* Synchronize cntvoff across all vtimers of a VM. */
 	update_vtimer_cntvoff(vcpu, kvm_phys_timer_read());
-	ptimer->cntvoff = 0;
-	hvtimer->cntvoff = 0;
-	hptimer->cntvoff = 0;
 
 	hrtimer_init(&timer->bg_timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 	timer->bg_timer.function = kvm_bg_timer_expire;
@@ -802,6 +808,18 @@ void kvm_timer_vcpu_init(struct kvm_vcpu *vcpu)
 	ptimer->host_timer_irq_flags = host_ptimer_irq_flags;
 	hvtimer->host_timer_irq_flags = host_vtimer_irq_flags;
 	hptimer->host_timer_irq_flags = host_ptimer_irq_flags;
+
+	vtimer->cnt_ctl_idx = CNTV_CTL_EL0;
+	vtimer->cnt_cval_idx = CNTV_CVAL_EL0;
+
+	ptimer->cnt_ctl_idx = CNTP_CTL_EL0;
+	ptimer->cnt_cval_idx = CNTP_CVAL_EL0;
+
+	hvtimer->cnt_ctl_idx = CNTHV_CTL_EL2;
+	hvtimer->cnt_cval_idx = CNTHV_CVAL_EL2;
+
+	hptimer->cnt_ctl_idx = CNTHP_CTL_EL2;
+	hptimer->cnt_cval_idx = CNTHP_CVAL_EL2;
 
 	vtimer->vcpu = vcpu;
 	ptimer->vcpu = vcpu;
@@ -862,9 +880,9 @@ static u64 read_timer_ctl(struct arch_timer_context *timer)
 	 * regardless of ENABLE bit for our implementation convenience.
 	 */
 	if (!kvm_timer_compute_delta(timer))
-		return timer->cnt_ctl | ARCH_TIMER_CTRL_IT_STAT;
+		return timer_cnt_ctl(timer) | ARCH_TIMER_CTRL_IT_STAT;
 	else
-		return timer->cnt_ctl;
+		return timer_cnt_ctl(timer);
 }
 
 u64 kvm_arm_timer_get_reg(struct kvm_vcpu *vcpu, u64 regid)
@@ -900,7 +918,7 @@ static u64 kvm_arm_timer_read(struct kvm_vcpu *vcpu,
 
 	switch (treg) {
 	case TIMER_REG_TVAL:
-		val = kvm_phys_timer_read() - timer->cntvoff - timer->cnt_cval;
+		val = kvm_phys_timer_read() - timer_cntvoff(vcpu, timer) - timer_cnt_cval(timer);
 		break;
 
 	case TIMER_REG_CTL:
@@ -908,15 +926,15 @@ static u64 kvm_arm_timer_read(struct kvm_vcpu *vcpu,
 		break;
 
 	case TIMER_REG_CVAL:
-		val = timer->cnt_cval;
+		val = timer_cnt_cval(timer);
 		break;
 
 	case TIMER_REG_CNT:
-		val = kvm_phys_timer_read() - timer->cntvoff;
+		val = kvm_phys_timer_read() - timer_cntvoff(vcpu, timer);
 		break;
 
 	case TIMER_REG_VOFF:
-		val = timer->cntvoff;
+		val = timer_cntvoff(vcpu, timer);
 		break;
 
 	default:
@@ -950,19 +968,19 @@ static void kvm_arm_timer_write(struct kvm_vcpu *vcpu,
 {
 	switch (treg) {
 	case TIMER_REG_TVAL:
-		timer->cnt_cval = val - kvm_phys_timer_read() - timer->cntvoff;
+		timer_cnt_cval(timer) = val - kvm_phys_timer_read() - timer_cntvoff(vcpu, timer);
 		break;
 
 	case TIMER_REG_CTL:
-		timer->cnt_ctl = val & ~ARCH_TIMER_CTRL_IT_STAT;
+		timer_cnt_ctl(timer) = val & ~ARCH_TIMER_CTRL_IT_STAT;
 		break;
 
 	case TIMER_REG_CVAL:
-		timer->cnt_cval = val;
+		timer_cnt_cval(timer) = val;
 		break;
 
 	case TIMER_REG_VOFF:
-		timer->cntvoff = val;
+		__vcpu_sys_reg(vcpu, CNTVOFF_EL2) = val;
 		break;
 
 	default:
@@ -1173,7 +1191,7 @@ int kvm_timer_enable(struct kvm_vcpu *vcpu)
 
 	/* Nested virtualization requires zero offset for virtual EL2 */
 	if (nested_virt_in_use(vcpu))
-		vcpu_vtimer(vcpu)->cntvoff = 0;
+		__vcpu_sys_reg(vcpu, CNTVOFF_EL2) = 0;
 
 	get_timer_map(vcpu, &map);
 
