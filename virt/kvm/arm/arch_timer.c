@@ -170,7 +170,7 @@ static u64 kvm_timer_compute_delta(struct arch_timer_context *timer_ctx)
 	u64 cval, now;
 
 	cval = timer_cnt_cval(timer_ctx);
-	now = kvm_phys_timer_read() - timer_cntvoff(vcpu, timer_ctx);
+	now = kvm_phys_timer_read() - timer_cntvoff(timer_ctx->vcpu, timer_ctx);
 
 	if (now < cval) {
 		u64 ns;
@@ -306,7 +306,7 @@ static bool kvm_timer_should_fire(struct arch_timer_context *timer_ctx)
 		return false;
 
 	cval = timer_cnt_cval(timer_ctx);
-	now = kvm_phys_timer_read() - timer_cntvoff(vcpu, timer_ctx);
+	now = kvm_phys_timer_read() - timer_cntvoff(timer_ctx->vcpu, timer_ctx);
 
 	return cval <= now;
 }
@@ -689,7 +689,10 @@ void kvm_timer_sync_nested(struct kvm_vcpu *vcpu)
 	 * Guest hypervisors using ARMv8.4 enhanced nested virt support have
 	 * their EL1 timer register accesses redirected to the VNCR page.
 	 */
-	if (is_hyp_ctxt(vcpu) && !vcpu_has_e2h_set(vcpu)) {
+	if (!is_hyp_ctxt(vcpu))
+		return;
+
+	if (!vcpu_el2_e2h_is_set(vcpu)) {
 		/*
 		 * For a non-VHE guest hypervisor, we update the hardware
 		 * timer registers with the latest value written by the guest
@@ -700,9 +703,9 @@ void kvm_timer_sync_nested(struct kvm_vcpu *vcpu)
 		write_sysreg_el0(__vcpu_sys_reg(vcpu, CNTV_CVAL_EL0), cntv_cval);
 		write_sysreg_el0(__vcpu_sys_reg(vcpu, CNTP_CTL_EL0),  cntp_ctl);
 		write_sysreg_el0(__vcpu_sys_reg(vcpu, CNTP_CVAL_EL0), cntp_cval);
-	} else if (is_hyp_ctxt) {
+	} else {
 		/*
-		 * For a non-VHE guest hypervisor, the emualted state (which
+		 * For a VHE guest hypervisor, the emulated state (which
 		 * is stored in the VNCR page) could have been updated behind
 		 * out backs, and we must reset the emulation of the timers.
 		 */

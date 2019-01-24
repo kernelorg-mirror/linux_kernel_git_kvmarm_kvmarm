@@ -305,8 +305,8 @@ TRACE_EVENT(kvm_timer_save_state,
 	),
 
 	TP_fast_assign(
-		__entry->ctl			= ctx->cnt_ctl;
-		__entry->cval			= ctx->cnt_cval;
+		__entry->ctl			= timer_cnt_ctl(ctx);
+		__entry->cval			= timer_cnt_cval(ctx);
 		__entry->timer_idx		= arch_timer_ctx_index(ctx);
 	),
 
@@ -327,8 +327,8 @@ TRACE_EVENT(kvm_timer_restore_state,
 	),
 
 	TP_fast_assign(
-		__entry->ctl			= ctx->cnt_ctl;
-		__entry->cval			= ctx->cnt_cval;
+		__entry->ctl			= timer_cnt_ctl(ctx);
+		__entry->cval			= timer_cnt_cval(ctx);
 		__entry->timer_idx		= arch_timer_ctx_index(ctx);
 	),
 
