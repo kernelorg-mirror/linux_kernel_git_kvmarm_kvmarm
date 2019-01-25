@@ -654,6 +654,12 @@ int vgic_v3_probe(const struct gic_kvm_info *info)
 			 group1_trap ? "G1" : "",
 			 common_trap ? "C"  : "");
 		static_branch_enable(&vgic_v3_cpuif_trap);
+
+		if (cpus_have_const_cap(ARM64_HAS_NESTED_VIRT)) {
+			kvm_info("Disabling nested virtualization with GICv3 sysreg trapping\n");
+			static_branch_disable(&cpu_hwcap_keys[ARM64_HAS_NESTED_VIRT]);
+			static_branch_disable(&cpu_hwcap_keys[ARM64_HAS_ENHANCED_NESTED_VIRT]);
+		}
 	}
 
 	kvm_vgic_global_state.vctrl_base = NULL;
