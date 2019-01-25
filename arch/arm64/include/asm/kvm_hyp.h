@@ -100,6 +100,7 @@ typeof(orig) * __hyp_text fname(void)					\
 int __vgic_v2_perform_cpuif_access(struct kvm_vcpu *vcpu);
 
 u64 __hyp_text __gic_v3_get_lr(unsigned int lr);
+void __hyp_text __gic_v3_set_lr(u64 val, int lr);
 
 void __vgic_v3_save_state(struct vgic_v3_cpu_if *cpu_if);
 void __vgic_v3_restore_state(struct vgic_v3_cpu_if *cpu_if);

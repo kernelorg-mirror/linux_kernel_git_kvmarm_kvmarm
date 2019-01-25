@@ -16,16 +16,6 @@
 #define CREATE_TRACE_POINTS
 #include "vgic-nested-trace.h"
 
-static inline struct vgic_v3_cpu_if *vcpu_nested_if(struct kvm_vcpu *vcpu)
-{
-	return &vcpu->arch.vgic_cpu.nested_vgic_v3;
-}
-
-static inline struct vgic_v3_cpu_if *vcpu_shadow_if(struct kvm_vcpu *vcpu)
-{
-	return &vcpu->arch.vgic_cpu.shadow_vgic_v3;
-}
-
 static inline bool lr_triggers_eoi(u64 lr)
 {
 	return !(lr & (ICH_LR_STATE | ICH_LR_HW)) && (lr & ICH_LR_EOI);
@@ -33,12 +23,13 @@ static inline bool lr_triggers_eoi(u64 lr)
 
 u16 vgic_v3_get_eisr(struct kvm_vcpu *vcpu)
 {
-	struct vgic_v3_cpu_if *cpu_if = vcpu_nested_if(vcpu);
 	u16 reg = 0;
 	int i;
 
 	for (i = 0; i < kvm_vgic_global_state.nr_lr; i++) {
-		if (lr_triggers_eoi(cpu_if->vgic_lr[i]))
+		u64 lr = __vcpu_sys_reg(vcpu, ICH_LR0_EL2 + i);
+
+		if (lr_triggers_eoi(lr))
 			reg |= BIT(i);
 	}
 
@@ -47,12 +38,13 @@ u16 vgic_v3_get_eisr(struct kvm_vcpu *vcpu)
 
 u16 vgic_v3_get_elrsr(struct kvm_vcpu *vcpu)
 {
-	struct vgic_v3_cpu_if *cpu_if = vcpu_nested_if(vcpu);
 	u16 reg = 0;
 	int i;
 
 	for (i = 0; i < kvm_vgic_global_state.nr_lr; i++) {
-		if (!(cpu_if->vgic_lr[i] & ICH_LR_STATE))
+		u64 lr = __vcpu_sys_reg(vcpu, ICH_LR0_EL2 + i);
+
+		if (!(lr & ICH_LR_STATE))
 			reg |= BIT(i);
 	}
 
@@ -61,14 +53,13 @@ u16 vgic_v3_get_elrsr(struct kvm_vcpu *vcpu)
 
 u64 vgic_v3_get_misr(struct kvm_vcpu *vcpu)
 {
-	struct vgic_v3_cpu_if *cpu_if = vcpu_nested_if(vcpu);
 	int nr_lr = kvm_vgic_global_state.nr_lr;
 	u64 reg = 0;
 
 	if (vgic_v3_get_eisr(vcpu))
 		reg |= ICH_MISR_EOI;
 
-	if (cpu_if->vgic_hcr & ICH_HCR_UIE) {
+	if (__vcpu_sys_reg(vcpu, ICH_HCR_EL2) & ICH_HCR_UIE) {
 		int used_lrs;
 
 		used_lrs = nr_lr - hweight16(vgic_v3_get_elrsr(vcpu));
@@ -80,77 +71,15 @@ u64 vgic_v3_get_misr(struct kvm_vcpu *vcpu)
 	return reg;
 }
 
-/*
- * For LRs which have HW bit set such as timer interrupts, we modify them to
- * have the host hardware interrupt number instead of the virtual one programmed
- * by the guest hypervisor.
- */
-static void vgic_v3_create_shadow_lr(struct kvm_vcpu *vcpu)
-{
-	struct vgic_v3_cpu_if *cpu_if = vcpu_nested_if(vcpu);
-	struct vgic_v3_cpu_if *s_cpu_if = vcpu_shadow_if(vcpu);
-	struct vgic_irq *irq;
-	int i;
-
-	for (i = 0; i < kvm_vgic_global_state.nr_lr; i++) {
-		u64 lr = cpu_if->vgic_lr[i];
-		int l1_irq;
-
-		if (!(lr & ICH_LR_HW))
-			goto next;
-
-		/* We have the HW bit set */
-		l1_irq = (lr & ICH_LR_PHYS_ID_MASK) >> ICH_LR_PHYS_ID_SHIFT;
-		irq = vgic_get_irq(vcpu->kvm, vcpu, l1_irq);
-
-		if (!irq || !irq->hw) {
-			/* There was no real mapping, so nuke the HW bit */
-			lr &= ~ICH_LR_HW;
-			if (irq)
-				vgic_put_irq(vcpu->kvm, irq);
-			goto next;
-		}
-
-		/* Translate the virtual mapping to the real one */
-		lr &= ~ICH_LR_EOI; /* Why? */
-		lr &= ~ICH_LR_PHYS_ID_MASK;
-		lr |= (u64)irq->hwintid << ICH_LR_PHYS_ID_SHIFT;
-		vgic_put_irq(vcpu->kvm, irq);
-
-next:
-		s_cpu_if->vgic_lr[i] = lr;
-	}
-
-	trace_vgic_create_shadow_lrs(vcpu, kvm_vgic_global_state.nr_lr,
-				     s_cpu_if->vgic_lr, cpu_if->vgic_lr);
-	s_cpu_if->used_lrs = kvm_vgic_global_state.nr_lr;
-}
-
-/*
- * Change the shadow HWIRQ field back to the virtual value before copying over
- * the entire shadow struct to the nested state.
- */
-static void vgic_v3_fixup_shadow_lr_state(struct kvm_vcpu *vcpu)
-{
-	struct vgic_v3_cpu_if *cpu_if = vcpu_nested_if(vcpu);
-	struct vgic_v3_cpu_if *s_cpu_if = vcpu_shadow_if(vcpu);
-	int lr;
-
-	for (lr = 0; lr < kvm_vgic_global_state.nr_lr; lr++) {
-		s_cpu_if->vgic_lr[lr] &= ~ICH_LR_PHYS_ID_MASK;
-		s_cpu_if->vgic_lr[lr] |= cpu_if->vgic_lr[lr] & ICH_LR_PHYS_ID_MASK;
-	}
-}
-
 void vgic_v3_sync_nested(struct kvm_vcpu *vcpu)
 {
-	struct vgic_v3_cpu_if *cpu_if = vcpu_nested_if(vcpu);
-	struct vgic_v3_cpu_if *s_cpu_if = vcpu_shadow_if(vcpu);
 	struct vgic_irq *irq;
 	int i;
+	int used_lrs = vcpu->arch.vgic_cpu.vgic_v3.used_lrs;
 
-	for (i = 0; i < s_cpu_if->used_lrs; i++) {
-		u64 lr = cpu_if->vgic_lr[i];
+	for (i = 0; i < used_lrs; i++) {
+		u64 lr = __vcpu_sys_reg(vcpu, ICH_LR0_EL2 + i);
+		u64 shadow_lr;
 		int l1_irq;
 
 		if (!(lr & ICH_LR_HW) || !(lr & ICH_LR_STATE))
@@ -166,9 +95,9 @@ void vgic_v3_sync_nested(struct kvm_vcpu *vcpu)
 		if (!irq)
 			continue; /* oh well, the guest hyp is broken */
 
-		lr = __gic_v3_get_lr(i);
-		if (!(lr & ICH_LR_STATE)) {
-			trace_vgic_nested_hw_emulate(i, lr, l1_irq);
+		shadow_lr = __gic_v3_get_lr(i);
+		if (!(shadow_lr & ICH_LR_STATE)) {
+			trace_vgic_nested_hw_emulate(i, shadow_lr, l1_irq);
 			irq->active = false;
 		}
 
@@ -176,15 +105,94 @@ void vgic_v3_sync_nested(struct kvm_vcpu *vcpu)
 	}
 }
 
+/*
+ * For LRs which have HW bit set such as timer interrupts, we modify them to
+ * have the host hardware interrupt number instead of the virtual one programmed
+ * by the guest hypervisor.
+ */
+static void vgic_v3_restore_shadow_lrs(struct kvm_vcpu *vcpu)
+{
+	struct vgic_irq *irq;
+	int i, used_lrs = 0;
+
+	for (i = 0; i < kvm_vgic_global_state.nr_lr; i++) {
+		u64 lr = __vcpu_sys_reg(vcpu, ICH_LR0_EL2 + i);
+		u64 orig_lr = lr;
+		int l1_irq;
+
+		if (!(lr & ICH_LR_HW))
+			goto write;
+
+		/* We have the HW bit set */
+		l1_irq = (lr & ICH_LR_PHYS_ID_MASK) >> ICH_LR_PHYS_ID_SHIFT;
+		irq = vgic_get_irq(vcpu->kvm, vcpu, l1_irq);
+
+		if (!irq || !irq->hw) {
+			/* There was no real mapping, so nuke the HW bit */
+			lr &= ~ICH_LR_HW;
+			if (irq)
+				vgic_put_irq(vcpu->kvm, irq);
+			goto write;
+		}
+
+		/* Translate the virtual mapping to the real one */
+		lr &= ~ICH_LR_EOI; /* Why? */
+		lr &= ~ICH_LR_PHYS_ID_MASK;
+		lr |= (u64)irq->hwintid << ICH_LR_PHYS_ID_SHIFT;
+		vgic_put_irq(vcpu->kvm, irq);
+
+write:
+		if (lr & ICH_LR_STATE) {
+			used_lrs = i + 1;
+			__gic_v3_set_lr(lr, i);
+			trace_vgic_restore_shadow_lr(vcpu, i, lr, orig_lr);
+		}
+	}
+
+	/* We reuse the existing used_lrs field here.  Horrible, but hey. */
+	vcpu->arch.vgic_cpu.vgic_v3.used_lrs = used_lrs;
+}
+
+static void vgic_v3_restore_state_nested(struct kvm_vcpu *vcpu)
+{
+	u64 val;
+	u32 nr_pre_bits;
+
+	write_gicreg(__vcpu_sys_reg(vcpu, ICH_VMCR_EL2), ICH_VMCR_EL2);
+	write_gicreg(__vcpu_sys_reg(vcpu, ICH_HCR_EL2), ICH_HCR_EL2);
+
+	val = read_gicreg(ICH_VTR_EL2);
+	nr_pre_bits = vtr_to_nr_pre_bits(val);
+
+	switch (nr_pre_bits) {
+	case 7:
+		write_gicreg(__vcpu_sys_reg(vcpu, ICH_AP0R3_EL2), ICH_AP0R3_EL2);
+		write_gicreg(__vcpu_sys_reg(vcpu, ICH_AP0R2_EL2), ICH_AP0R2_EL2);
+	case 6:
+		write_gicreg(__vcpu_sys_reg(vcpu, ICH_AP0R1_EL2), ICH_AP0R1_EL2);
+	default:
+		write_gicreg(__vcpu_sys_reg(vcpu, ICH_AP0R0_EL2), ICH_AP0R0_EL2);
+	}
+
+	switch (nr_pre_bits) {
+	case 7:
+		write_gicreg(__vcpu_sys_reg(vcpu, ICH_AP1R3_EL2), ICH_AP1R3_EL2);
+		write_gicreg(__vcpu_sys_reg(vcpu, ICH_AP1R2_EL2), ICH_AP1R2_EL2);
+	case 6:
+		write_gicreg(__vcpu_sys_reg(vcpu, ICH_AP1R1_EL2), ICH_AP1R1_EL2);
+	default:
+		write_gicreg(__vcpu_sys_reg(vcpu, ICH_AP1R0_EL2), ICH_AP1R0_EL2);
+	}
+
+	vgic_v3_restore_shadow_lrs(vcpu);
+}
+
 void vgic_v3_load_nested(struct kvm_vcpu *vcpu)
 {
-	struct vgic_cpu *vgic_cpu = &vcpu->arch.vgic_cpu;
 	struct vgic_irq *irq;
 	unsigned long flags;
 
-	vgic_cpu->shadow_vgic_v3 = vgic_cpu->nested_vgic_v3;
-	vgic_v3_create_shadow_lr(vcpu);
-	__vgic_v3_restore_state(vcpu_shadow_if(vcpu));
+	vgic_v3_restore_state_nested(vcpu);
 
 	irq = vgic_get_irq(vcpu->kvm, vcpu, vcpu->kvm->arch.vgic.maint_irq);
 	spin_lock_irqsave(&irq->irq_lock, flags);
@@ -195,28 +203,73 @@ void vgic_v3_load_nested(struct kvm_vcpu *vcpu)
 	vgic_put_irq(vcpu->kvm, irq);
 }
 
+/*
+ * Update the LR state field from the shadow LR in hardware.
+ */
+static void vgic_v3_save_shadow_lrs(struct kvm_vcpu *vcpu)
+{
+	int i;
+
+	for (i = 0; i < vcpu->arch.vgic_cpu.vgic_v3.used_lrs; i++) {
+		u64 lr = __vcpu_sys_reg(vcpu, ICH_LR0_EL2 + i);
+
+		if ((lr & ICH_LR_STATE)) {
+			u64 shadow_lr = __gic_v3_get_lr(i);
+
+			lr = (lr & ~ICH_LR_STATE) | (shadow_lr & ICH_LR_STATE);
+			__vcpu_sys_reg(vcpu, ICH_LR0_EL2 + i) = lr;
+
+			__gic_v3_set_lr(0, i);
+
+			trace_vgic_save_shadow_lr(vcpu, i, shadow_lr, lr);
+		}
+	}
+}
+
+static void vgic_v3_save_state_nested(struct kvm_vcpu *vcpu)
+{
+	u64 val;
+	u32 nr_pre_bits;
+
+	__vcpu_sys_reg(vcpu, ICH_VMCR_EL2) = read_gicreg(ICH_VMCR_EL2);
+	__vcpu_sys_reg(vcpu, ICH_HCR_EL2) = read_gicreg(ICH_HCR_EL2);
+
+	val = read_gicreg(ICH_VTR_EL2);
+	nr_pre_bits = vtr_to_nr_pre_bits(val);
+
+	switch (nr_pre_bits) {
+	case 7:
+		__vcpu_sys_reg(vcpu, ICH_AP0R3_EL2) = read_gicreg(ICH_AP0R3_EL2);
+		__vcpu_sys_reg(vcpu, ICH_AP0R2_EL2) = read_gicreg(ICH_AP0R2_EL2);
+	case 6:
+		__vcpu_sys_reg(vcpu, ICH_AP0R1_EL2) = read_gicreg(ICH_AP0R1_EL2);
+	default:
+		__vcpu_sys_reg(vcpu, ICH_AP0R0_EL2) = read_gicreg(ICH_AP0R0_EL2);
+	}
+
+	switch (nr_pre_bits) {
+	case 7:
+		__vcpu_sys_reg(vcpu, ICH_AP1R3_EL2) = read_gicreg(ICH_AP1R3_EL2);
+		__vcpu_sys_reg(vcpu, ICH_AP1R2_EL2) = read_gicreg(ICH_AP1R2_EL2);
+	case 6:
+		__vcpu_sys_reg(vcpu, ICH_AP1R1_EL2) = read_gicreg(ICH_AP1R1_EL2);
+	default:
+		__vcpu_sys_reg(vcpu, ICH_AP1R0_EL2) = read_gicreg(ICH_AP1R0_EL2);
+	}
+
+	vgic_v3_save_shadow_lrs(vcpu);
+}
+
 void vgic_v3_put_nested(struct kvm_vcpu *vcpu)
 {
-	struct vgic_cpu *vgic_cpu = &vcpu->arch.vgic_cpu;
+	vgic_v3_save_state_nested(vcpu);
 
-	__vgic_v3_save_state(vcpu_shadow_if(vcpu));
-
-	trace_vgic_put_nested(vcpu, kvm_vgic_global_state.nr_lr,
-			      vcpu_shadow_if(vcpu)->vgic_lr);
-
-	/*
-	 * Translate the shadow state HW fields back to the virtual ones
-	 * before copying the shadow struct back to the nested one.
-	 */
-	vgic_v3_fixup_shadow_lr_state(vcpu);
-	vgic_cpu->nested_vgic_v3 = vgic_cpu->shadow_vgic_v3;
 	irq_set_irqchip_state(kvm_vgic_global_state.maint_irq,
 			      IRQCHIP_STATE_ACTIVE, false);
 }
 
 void vgic_v3_handle_nested_maint_irq(struct kvm_vcpu *vcpu)
 {
-	struct vgic_v3_cpu_if *cpu_if = vcpu_nested_if(vcpu);
 	bool state;
 
 	/*
@@ -228,7 +281,7 @@ void vgic_v3_handle_nested_maint_irq(struct kvm_vcpu *vcpu)
 	if (!vgic_state_is_nested(vcpu))
 		return;
 
-	state  = cpu_if->vgic_hcr & ICH_HCR_EN;
+	state  = __vcpu_sys_reg(vcpu, ICH_HCR_EL2) & ICH_HCR_EN;
 	state &= vgic_v3_get_misr(vcpu);
 
 	kvm_vgic_inject_irq(vcpu->kvm, vcpu->vcpu_id,

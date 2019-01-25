@@ -251,6 +251,20 @@ enum vcpu_sysreg {
 	CNTHP_CVAL_EL2,
 	CNTVOFF_EL2,	/* ARMv8.4-NV=0x60 */
 
+	/* GIC Registers */
+	ICH_HCR_EL2,				/* ARMv8.4-NV=0x4c0 */
+	ICH_VMCR_EL2,				/* ARMv8.4-NV=0x4c8 */
+	ICH_AP0R0_EL2,				/* ARMv8.4-NV=0x480 */
+	ICH_AP0R1_EL2,				/* ARMv8.4-NV=0x488 */
+	ICH_AP0R2_EL2,				/* ARMv8.4-NV=0x490 */
+	ICH_AP0R3_EL2,				/* ARMv8.4-NV=0x498 */
+	ICH_AP1R0_EL2,				/* ARMv8.4-NV=0x4a0 */
+	ICH_AP1R1_EL2,				/* ARMv8.4-NV=0x4a8 */
+	ICH_AP1R2_EL2,				/* ARMv8.4-NV=0x4b0 */
+	ICH_AP1R3_EL2,				/* ARMv8.4-NV=0x4b8 */
+	ICH_LR0_EL2,				/* ARMv8.4-NV=0x400 */
+	ICH_LR15_EL2 = ICH_LR0_EL2 + 15,	/* ARMv8.4-NV=0x478 */
+
 
 	NR_SYS_REGS	/* Nothing after this line! */
 };

@@ -7,103 +7,56 @@
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM kvm
 
-#define SLR_ENTRY_VALS(x)							\
-	" ",									\
-	!!(__entry->lrs[x] & ICH_LR_HW),		   			\
-	!!(__entry->lrs[x] & ICH_LR_PENDING_BIT),	   			\
-	!!(__entry->lrs[x] & ICH_LR_ACTIVE_BIT),	   			\
-	__entry->lrs[x] & ICH_LR_VIRTUAL_ID_MASK,				\
-	(__entry->lrs[x] & ICH_LR_PHYS_ID_MASK) >> ICH_LR_PHYS_ID_SHIFT,	\
-	(__entry->orig_lrs[x] & ICH_LR_PHYS_ID_MASK) >> ICH_LR_PHYS_ID_SHIFT
-
-TRACE_EVENT(vgic_create_shadow_lrs,
-	TP_PROTO(struct kvm_vcpu *vcpu, int nr_lr, u64 *lrs, u64 *orig_lrs),
-	TP_ARGS(vcpu, nr_lr, lrs, orig_lrs),
+TRACE_EVENT(vgic_restore_shadow_lr,
+	TP_PROTO(struct kvm_vcpu *vcpu, int lr_idx, u64 lr, u64 orig_lr),
+	TP_ARGS(vcpu, lr_idx, lr, orig_lr),
 
 	TP_STRUCT__entry(
-		__field(	int,	nr_lr			)
-		__array(	u64,	lrs,		16	)
-		__array(	u64,	orig_lrs,	16	)
+		__field(	int,	lr_idx			)
+		__field(	u64,	lr			)
+		__field(	u64,	orig_lr			)
 	),
 
 	TP_fast_assign(
-		__entry->nr_lr		= nr_lr;
-		memcpy(__entry->lrs, lrs, 16 * sizeof(u64));
-		memcpy(__entry->orig_lrs, orig_lrs, 16 * sizeof(u64));
+		__entry->lr_idx		= lr_idx;
+		__entry->lr		= lr;
+		__entry->orig_lr	= orig_lr;
 	),
 
-	TP_printk("nr_lr: %d\n"
-		  "%50sLR[ 0]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[ 1]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[ 2]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[ 3]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[ 4]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[ 5]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[ 6]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[ 7]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[ 8]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[ 9]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[10]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[11]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[12]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[13]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[14]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n"
-		  "%50sLR[15]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)",
-		  __entry->nr_lr,
-		  SLR_ENTRY_VALS(0), SLR_ENTRY_VALS(1), SLR_ENTRY_VALS(2),
-		  SLR_ENTRY_VALS(3), SLR_ENTRY_VALS(4), SLR_ENTRY_VALS(5),
-		  SLR_ENTRY_VALS(6), SLR_ENTRY_VALS(7), SLR_ENTRY_VALS(8),
-		  SLR_ENTRY_VALS(9), SLR_ENTRY_VALS(10), SLR_ENTRY_VALS(11),
-		  SLR_ENTRY_VALS(12), SLR_ENTRY_VALS(13), SLR_ENTRY_VALS(14),
-		  SLR_ENTRY_VALS(15))
+	TP_printk("LR[%2d]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n",
+		   __entry->lr_idx,
+		   !!(__entry->lr & ICH_LR_HW),
+		   !!(__entry->lr & ICH_LR_PENDING_BIT),
+		   !!(__entry->lr & ICH_LR_ACTIVE_BIT),
+		   __entry->lr & ICH_LR_VIRTUAL_ID_MASK,
+		   (__entry->lr & ICH_LR_PHYS_ID_MASK) >> ICH_LR_PHYS_ID_SHIFT,
+		   (__entry->orig_lr & ICH_LR_PHYS_ID_MASK) >> ICH_LR_PHYS_ID_SHIFT)
 );
 
-#define LR_ENTRY_VALS(x)							\
-	" ",									\
-	!!(__entry->lrs[x] & ICH_LR_HW),		   			\
-	!!(__entry->lrs[x] & ICH_LR_PENDING_BIT),	   			\
-	!!(__entry->lrs[x] & ICH_LR_ACTIVE_BIT),	   			\
-	__entry->lrs[x] & ICH_LR_VIRTUAL_ID_MASK,				\
-	(__entry->lrs[x] & ICH_LR_PHYS_ID_MASK) >> ICH_LR_PHYS_ID_SHIFT
-
-TRACE_EVENT(vgic_put_nested,
-	TP_PROTO(struct kvm_vcpu *vcpu, int nr_lr, u64 *lrs),
-	TP_ARGS(vcpu, nr_lr, lrs),
+TRACE_EVENT(vgic_save_shadow_lr,
+	TP_PROTO(struct kvm_vcpu *vcpu, int lr_idx, u64 lr, u64 orig_lr),
+	TP_ARGS(vcpu, lr_idx, lr, orig_lr),
 
 	TP_STRUCT__entry(
-		__field(	int,	nr_lr			)
-		__array(	u64,	lrs,		16	)
+		__field(	int,	lr_idx			)
+		__field(	u64,	lr			)
+		__field(	u64,	orig_lr			)
 	),
 
 	TP_fast_assign(
-		__entry->nr_lr		= nr_lr;
-		memcpy(__entry->lrs, lrs, 16 * sizeof(u64));
+		__entry->lr_idx		= lr_idx;
+		__entry->lr		= lr;
+		__entry->orig_lr	= orig_lr;
 	),
 
-	TP_printk("nr_lr: %d\n"
-		  "%50sLR[ 0]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[ 1]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[ 2]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[ 3]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[ 4]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[ 5]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[ 6]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[ 7]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[ 8]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[ 9]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[10]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[11]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[12]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[13]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[14]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu\n"
-		  "%50sLR[15]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu",
-		  __entry->nr_lr,
-		  LR_ENTRY_VALS(0), LR_ENTRY_VALS(1), LR_ENTRY_VALS(2),
-		  LR_ENTRY_VALS(3), LR_ENTRY_VALS(4), LR_ENTRY_VALS(5),
-		  LR_ENTRY_VALS(6), LR_ENTRY_VALS(7), LR_ENTRY_VALS(8),
-		  LR_ENTRY_VALS(9), LR_ENTRY_VALS(10), LR_ENTRY_VALS(11),
-		  LR_ENTRY_VALS(12), LR_ENTRY_VALS(13), LR_ENTRY_VALS(14),
-		  LR_ENTRY_VALS(15))
+	TP_printk("LR[%2d]: HW: %d P: %d: A: %d vINTID: %5llu pINTID: %5llu (%5llu)\n",
+		   __entry->lr_idx,
+		   !!(__entry->lr & ICH_LR_HW),
+		   !!(__entry->lr & ICH_LR_PENDING_BIT),
+		   !!(__entry->lr & ICH_LR_ACTIVE_BIT),
+		   __entry->lr & ICH_LR_VIRTUAL_ID_MASK,
+		   (__entry->lr & ICH_LR_PHYS_ID_MASK) >> ICH_LR_PHYS_ID_SHIFT,
+		   (__entry->orig_lr & ICH_LR_PHYS_ID_MASK) >> ICH_LR_PHYS_ID_SHIFT)
 );
 
 TRACE_EVENT(vgic_nested_hw_emulate,

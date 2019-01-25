@@ -575,6 +575,10 @@
 #define ICC_SGI1R_AFFINITY_3_SHIFT	48
 #define ICC_SGI1R_AFFINITY_3_MASK	(0xffULL << ICC_SGI1R_AFFINITY_3_SHIFT)
 
+#define vtr_to_max_lr_idx(v)		((v) & 0xf)
+#define vtr_to_nr_pre_bits(v)		((((u32)(v) >> 26) & 7) + 1)
+#define vtr_to_nr_apr_regs(v)		(1 << (vtr_to_nr_pre_bits(v) - 5))
+
 #include <asm/arch_gicv3.h>
 
 #ifndef __ASSEMBLY__
